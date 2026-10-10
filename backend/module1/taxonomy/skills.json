@@ -1,0 +1,20 @@
+{
+  "programming_languages": [
+    "Python", "Java", "C++", "C", "C#", "JavaScript", "TypeScript", "Go", "Rust", "Kotlin", "Swift", "PHP", "Ruby", "R", "Scala", "Dart", "SQL", "HTML", "CSS", "Bash", "Shell"
+  ],
+  "frameworks_and_libraries": [
+    "React", "React Native", "Next.js", "Vue.js", "Angular", "Node.js", "Express.js", "FastAPI", "Flask", "Django", "Spring Boot", "ASP.NET", "Tailwind CSS", "Bootstrap", "Redux", "Zustand"
+  ],
+  "ai_and_data_science": [
+    "Machine Learning", "Deep Learning", "NLP", "Natural Language Processing", "Computer Vision", "TensorFlow", "PyTorch", "scikit-learn", "Keras", "spaCy", "NLTK", "Transformers", "Hugging Face", "Pandas", "NumPy", "Matplotlib", "Seaborn", "OpenCV", "LLM", "Generative AI", "LangChain"
+  ],
+  "databases_and_storage": [
+    "PostgreSQL", "MySQL", "MongoDB", "SQLite", "Redis", "Cassandra", "Oracle", "Firebase", "DynamoDB", "Elasticsearch"
+  ],
+  "cloud_and_devops": [
+    "Docker", "Kubernetes", "AWS", "Azure", "GCP", "Google Cloud Platform", "CI/CD", "Git", "GitHub", "GitLab", "Linux", "Terraform", "Jenkins", "Nginx"
+  ],
+  "core_cs_and_methodologies": [
+    "DSA", "Data Structures and Algorithms", "OOP", "Object-Oriented Programming", "DBMS", "Database Management Systems", "Operating Systems", "Computer Networks", "System Design", "REST APIs", "GraphQL", "Microservices", "Agile", "Scrum", "TDD"
+  ]
+}
