@@ -62,30 +62,7 @@ export default function TopicsScreen({ navigation }) {
   };
 
   const handleStartInterviewHandoff = () => {
-    // Integration handoff point for Person 2's question generation module
-    const handoffPayload = {
-      profile_id: profile_id,
-      mode: mode,
-      job_title: job.title,
-      interview_topics: interview_topics,
-      candidate_projects: candidate.projects,
-      job_responsibilities: job.responsibilities,
-    };
-
-    Alert.alert(
-      'Ready for Module 2 Mock Interview',
-      `Profile ID: ${profile_id}\n\n${interview_topics.length} ranked topics and project metadata packaged for Module 2 Question Engine.`,
-      [
-        {
-          text: 'Return Home',
-          onPress: () => navigation.navigate('Home'),
-        },
-        {
-          text: 'Stay on Topics',
-          style: 'cancel',
-        },
-      ]
-    );
+    navigation.navigate('MockInterview');
   };
 
   return (

@@ -112,4 +112,32 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.detail || 'Failed to delete profile');
     return data;
   },
+
+  async generateQuestions(profileId, numQuestions = 5) {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/questions/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, num_questions: numQuestions }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to generate interview questions');
+    return data;
+  },
+
+  async generateFollowup({ questionId, originalQuestion, targetTopic, candidateAnswer, missingConcepts }) {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/questions/followup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question_id: questionId,
+        original_question: originalQuestion,
+        target_topic: targetTopic || '',
+        candidate_answer: candidateAnswer,
+        missing_concepts: missingConcepts || [],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to generate follow-up question');
+    return data;
+  },
 };

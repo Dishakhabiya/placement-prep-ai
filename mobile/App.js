@@ -11,6 +11,7 @@ import ReviewProfileScreen from './src/screens/ReviewProfileScreen';
 import MatchSummaryScreen from './src/screens/MatchSummaryScreen';
 import TopicsScreen from './src/screens/TopicsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
+import MockInterviewScreen from './src/screens/MockInterviewScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +65,11 @@ export default function App() {
           name="Topics"
           component={TopicsScreen}
           options={{ title: 'Ranked Interview Topics' }}
+        />
+        <Stack.Screen
+          name="MockInterview"
+          component={MockInterviewScreen}
+          options={{ title: 'Module 2: Mock Interview Session' }}
         />
         <Stack.Screen
           name="History"

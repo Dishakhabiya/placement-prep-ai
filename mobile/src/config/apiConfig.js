@@ -12,4 +12,4 @@ const DEFAULT_HOST = Platform.select({
   default: 'http://localhost:8000',
 });
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.29.237:8000';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEFAULT_HOST;
