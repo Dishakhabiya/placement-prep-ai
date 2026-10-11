@@ -12,6 +12,7 @@ import MatchSummaryScreen from './src/screens/MatchSummaryScreen';
 import TopicsScreen from './src/screens/TopicsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import MockInterviewScreen from './src/screens/MockInterviewScreen';
+import PerformanceReportScreen from './src/screens/PerformanceReportScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -70,6 +71,11 @@ export default function App() {
           name="MockInterview"
           component={MockInterviewScreen}
           options={{ title: 'Module 2: Mock Interview Session' }}
+        />
+        <Stack.Screen
+          name="PerformanceReport"
+          component={PerformanceReportScreen}
+          options={{ title: 'Session Performance Report' }}
         />
         <Stack.Screen
           name="History"

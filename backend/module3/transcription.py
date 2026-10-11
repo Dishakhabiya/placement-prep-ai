@@ -12,8 +12,8 @@ WHISPER_MODEL_NAME = os.getenv("WHISPER_MODEL_NAME", "base")  # tiny, base, smal
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")  # int8, float32
 
-MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024  # 25 MB limit
-MIN_AUDIO_FILE_SIZE = 128  # Audio files under 128 bytes cannot be valid
+MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024  # 50 MB limit (accommodates synchronized video/audio WebM)
+MIN_AUDIO_FILE_SIZE = 128  # Audio/video files under 128 bytes cannot be valid
 
 ALLOWED_AUDIO_EXTENSIONS = {
     ".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".webm", ".opus", ".mp4"
@@ -239,11 +239,19 @@ class WhisperTranscriptionService:
                     beam_size=1,
                     word_timestamps=False
                 )
-                segment_texts = [s.text.strip() for s in segments if s.text.strip()]
+                segment_texts = []
+                raw_segments = []
+                for s in segments:
+                    text_str = s.text.strip()
+                    if text_str:
+                        segment_texts.append(text_str)
+                        raw_segments.append({"start": getattr(s, "start", 0.0), "end": getattr(s, "end", 0.0), "text": text_str})
+
                 transcript = " ".join(segment_texts).strip()
 
                 return {
                     "transcript": transcript,
+                    "segments": raw_segments,
                     "detected_language": info.language if hasattr(info, "language") else "en",
                     "language_probability": round(info.language_probability, 3) if hasattr(info, "language_probability") else 1.0,
                     "duration_seconds": round(info.duration, 2) if hasattr(info, "duration") else None,

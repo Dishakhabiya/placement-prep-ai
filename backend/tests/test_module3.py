@@ -187,8 +187,8 @@ def test_validate_audio_file_empty_and_corrupt():
 
 
 def test_validate_audio_file_oversized():
-    # Exceeds 25 MB
-    large_bytes = b"\x00" * (26 * 1024 * 1024)
+    # Exceeds 50 MB
+    large_bytes = b"\x00" * (51 * 1024 * 1024)
     with pytest.raises(AudioValidationError) as exc:
         validate_audio_file("huge.wav", large_bytes)
     assert exc.value.status_code == 413
@@ -362,6 +362,36 @@ def test_api_transcribe_browser_webm_blob_upload():
     service.set_mock_handler(None)
 
 
+def test_api_transcribe_video_webm_upload():
+    service = get_transcription_service()
+    service.set_mock_handler(lambda path: {
+        "transcript": "Video recording captured synchronized candidate response.",
+        "detected_language": "en",
+        "language_probability": 0.99,
+        "duration_seconds": 5.0,
+        "model_used": "whisper-mock-unit",
+        "status": "success"
+    })
+
+    # Simulates synchronized video/audio WebM container from MediaRecorder
+    dummy_video_webm = b"\x1a\x45\xdf\xa3" + b"\x00" * 400
+    files = {
+        "audio": ("interview_response.webm", io.BytesIO(dummy_video_webm), "video/webm;codecs=vp8,opus")
+    }
+    data = {
+        "question_id": "q_video_1",
+        "question_text": "Explain your approach to video-based mock interviews.",
+        "expected_key_concepts": "[\"video recording\", \"audio\"]",
+    }
+
+    response = client.post("/api/answers/transcribe", files=files, data=data)
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["question_id"] == "q_video_1"
+    assert "Video recording captured" in res_json["transcript_metadata"]["transcript"]
+
+    service.set_mock_handler(None)
+
 
 def test_api_transcribe_audio_empty_file():
     files = {
@@ -390,7 +420,7 @@ def test_api_transcribe_audio_unsupported_type():
 
 
 def test_api_transcribe_audio_oversized():
-    huge_bytes = b"\x00" * (26 * 1024 * 1024)
+    huge_bytes = b"\x00" * (51 * 1024 * 1024)
     files = {
         "audio": ("large.wav", io.BytesIO(huge_bytes), "audio/wav")
     }

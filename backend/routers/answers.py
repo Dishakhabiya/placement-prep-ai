@@ -22,7 +22,13 @@ from module3.transcription import (
     TranscriptionInferenceError,
 )
 
-logger = logging.getLogger(__name__)
+from module4 import (
+    analyze_speaking_delivery,
+    analyze_video_frames,
+    aggregate_session_report,
+    SessionReportRequest,
+    SessionReportResponse,
+)
 
 router = APIRouter(prefix="/api/answers", tags=["Module 3: Speech & Answer Evaluation"])
 
@@ -124,11 +130,17 @@ async def transcribe_and_evaluate_answer(
     except AudioValidationError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    # 6. Execute Whisper Transcription with safe temp file cleanup
+    # 6. Execute Whisper Transcription and Module 4 Video/Audio Analysis with safe temp file cleanup
     transcription_service = get_transcription_service()
+    visual_analysis_result = None
     try:
-        with temporary_audio_file(audio_bytes, filename=filename) as temp_audio_path:
-            transcription_result = transcription_service.transcribe(temp_audio_path)
+        with temporary_audio_file(audio_bytes, filename=filename) as temp_media_path:
+            transcription_result = transcription_service.transcribe(temp_media_path)
+            try:
+                visual_analysis_result = analyze_video_frames(temp_media_path)
+            except Exception as ve:
+                logger.warning(f"Module 4 visual analysis skipped due to error: {ve}")
+                visual_analysis_result = None
     except ModelLoadError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     except TranscriptionInferenceError as e:
@@ -162,6 +174,21 @@ async def transcribe_and_evaluate_answer(
         session_id=session_id.strip() if session_id else None,
         metadata=metadata
     )
+
+    # 9. Compute Module 4 Speaking Delivery Metrics
+    try:
+        delivery_res = analyze_speaking_delivery(
+            transcript=transcript_text,
+            duration_seconds=transcription_result.get("duration_seconds"),
+            segments=transcription_result.get("segments"),
+        )
+        evaluation.delivery_metrics = delivery_res
+    except Exception as de:
+        logger.warning(f"Module 4 speaking delivery calculation skipped: {de}")
+        evaluation.delivery_metrics = None
+
+    # Attach Visual Metrics
+    evaluation.visual_metrics = visual_analysis_result
 
     return evaluation
 
@@ -205,7 +232,7 @@ def analyze_text_answer(
         status="text_input"
     )
 
-    return evaluate_answer(
+    evaluation = evaluate_answer(
         question_id=req.question_id,
         question_text=req.question_text,
         expected_concepts=req.expected_key_concepts or [],
@@ -214,3 +241,56 @@ def analyze_text_answer(
         session_id=req.session_id,
         metadata=metadata
     )
+
+    # Compute text-based filler word statistics
+    try:
+        words = req.answer_text.strip().split() if req.answer_text else []
+        estimated_dur = len(words) / 2.2 if words else 0.0  # Approx 130 WPM speech assumption
+        evaluation.delivery_metrics = analyze_speaking_delivery(
+            transcript=req.answer_text,
+            duration_seconds=estimated_dur,
+        )
+    except Exception:
+        evaluation.delivery_metrics = None
+
+    return evaluation
+
+
+@router.post(
+    "/session-report",
+    response_model=SessionReportResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate aggregated performance report for complete mock interview session"
+)
+def generate_session_report_endpoint(
+    req: SessionReportRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Aggregates answer relevance, concept coverage, speaking pacing, filler words,
+    pauses, and visual framing alignment across all answered questions in a session.
+    """
+    candidate_name = req.candidate_name
+    target_role = req.target_role
+
+    if req.profile_id and (not candidate_name or not target_role):
+        record = db.query(ProfileRecord).filter(ProfileRecord.profile_id == req.profile_id).first()
+        if record:
+            data = record.data or {}
+            cand = data.get("candidate", {})
+            job = data.get("job", {})
+            if not candidate_name:
+                candidate_name = cand.get("name") or "Candidate"
+            if not target_role:
+                target_role = job.get("title") or "Software Engineer"
+
+    report = aggregate_session_report(
+        evaluations=req.evaluations,
+        total_questions=req.total_questions,
+        questions=req.questions,
+        profile_id=req.profile_id,
+        session_id=req.session_id,
+        candidate_name=candidate_name or "Candidate",
+        target_role=target_role or "Software Engineer",
+    )
+    return report

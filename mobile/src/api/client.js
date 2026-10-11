@@ -205,5 +205,27 @@ export const apiClient = {
     }
     return data;
   },
+
+  async generateSessionReport({ evaluations, totalQuestions, questions, profileId, sessionId, candidateName, targetRole }) {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/session-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId || null,
+        profile_id: profileId || null,
+        candidate_name: candidateName || null,
+        target_role: targetRole || null,
+        total_questions: totalQuestions || null,
+        questions: questions || null,
+        evaluations: evaluations || [],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errorMsg = data.detail || `Server error (${res.status})`;
+      throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    }
+    return data;
+  },
 };
 

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Any
 from pydantic import BaseModel, Field
 
 
@@ -59,6 +59,8 @@ class AnswerEvaluationResponse(BaseModel):
     transcript_metadata: TranscriptMetadata = Field(..., description="Transcript text and audio processing metadata")
     relevance: AnswerRelevanceResult = Field(..., description="Relevance analysis of transcript to question")
     concept_coverage: ConceptCoverageSummary = Field(..., description="Expected-concept coverage breakdown")
+    delivery_metrics: Optional[Any] = Field(default=None, description="Module 4 speaking delivery metrics (WPM, fillers, pauses)")
+    visual_metrics: Optional[Any] = Field(default=None, description="Module 4 computer vision metrics (face presence, centering, posture)")
     evaluated_at: str = Field(..., description="ISO 8601 UTC timestamp of evaluation")
 
 
