@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_db
 from routers.profile import router as profile_router
 from routers.questions import router as questions_router
+from routers.answers import router as answers_router
+
 
 
 @asynccontextmanager
@@ -39,6 +41,8 @@ app.add_middleware(
 # Register endpoints
 app.include_router(profile_router)
 app.include_router(questions_router)
+app.include_router(answers_router)
+
 
 
 @app.get("/")

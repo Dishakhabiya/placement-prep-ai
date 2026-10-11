@@ -140,4 +140,70 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.detail || 'Failed to generate follow-up question');
     return data;
   },
+
+  async evaluateAnswerText({ profileId, sessionId, questionId, questionText, expectedKeyConcepts, answerText }) {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile_id: profileId || null,
+        session_id: sessionId || null,
+        question_id: questionId,
+        question_text: questionText,
+        expected_key_concepts: expectedKeyConcepts || [],
+        answer_text: answerText,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errorMsg = data.detail || `Server error (${res.status})`;
+      throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    }
+    return data;
+  },
+
+  async transcribeAudioAnswer({ audioFile, profileId, sessionId, questionId, questionText, expectedKeyConcepts }) {
+    const formData = new FormData();
+    if (audioFile) {
+      if (typeof window !== 'undefined' && audioFile instanceof Blob) {
+        let defaultName = 'recording.webm';
+        if (audioFile.type && audioFile.type.includes('mp4')) defaultName = 'recording.mp4';
+        else if (audioFile.type && audioFile.type.includes('ogg')) defaultName = 'recording.ogg';
+        else if (audioFile.type && audioFile.type.includes('wav')) defaultName = 'recording.wav';
+        formData.append('audio', audioFile, audioFile.name || defaultName);
+      } else if (audioFile.uri) {
+
+        try {
+          const fileRes = await fetch(audioFile.uri);
+          const blob = await fileRes.blob();
+          formData.append('audio', blob, audioFile.name || 'answer.wav');
+        } catch {
+          formData.append('audio', {
+            uri: audioFile.uri,
+            name: audioFile.name || 'answer.wav',
+            type: audioFile.mimeType || 'audio/wav',
+          });
+        }
+      }
+    }
+
+    formData.append('question_id', questionId);
+    formData.append('question_text', questionText);
+    if (profileId) formData.append('profile_id', profileId);
+    if (sessionId) formData.append('session_id', sessionId);
+    formData.append('expected_key_concepts', JSON.stringify(expectedKeyConcepts || []));
+
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/transcribe`, {
+      method: 'POST',
+      body: formData,
+    }, 45000);
+
+    const data = await res.json();
+    if (!res.ok) {
+      const errorMsg = data.detail || `Server error (${res.status})`;
+      throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    }
+    return data;
+  },
 };
+

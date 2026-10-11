@@ -22,7 +22,14 @@ ENV/
 backend/placement_prep.db
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/uploads/temp_audio/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.ogg
 .pytest_cache/
+
 
 # OS / IDE
 .DS_Store
