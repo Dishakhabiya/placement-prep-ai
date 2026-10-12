@@ -1,8 +1,11 @@
+import re
 import os
 import json
 import logging
 
 from typing import List, Optional
+from fastapi.responses import Response
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -294,3 +297,56 @@ def generate_session_report_endpoint(
         target_role=target_role or "Software Engineer",
     )
     return report
+
+
+class TtsRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "en-US-JennyNeural"
+    rate: Optional[str] = "-3%"
+    pitch: Optional[str] = "+0Hz"
+
+
+@router.post(
+    "/tts",
+    summary="Generate crystal-clear natural neural TTS audio stream",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+)
+async def generate_neural_tts(req: TtsRequest):
+    """
+    Synthesizes text into high-fidelity neural speech (MP3) using natural voices
+    (e.g. en-US-JennyNeural, en-IN-NeerjaNeural, en-US-AriaNeural, en-GB-SoniaNeural).
+    """
+    if not req.text or not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty.")
+
+    # Clean text to remove markdown asterisks, hash headers, brackets, and code delimiters for crystal-clear pronunciation
+    clean_text = re.sub(r'[*_#`~]', '', req.text)
+    clean_text = re.sub(r'\[.*?\]', '', clean_text)
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    if not clean_text:
+        clean_text = req.text.strip()
+
+    voice = req.voice or "en-US-JennyNeural"
+    rate = req.rate or "-3%"
+    pitch = req.pitch or "+0Hz"
+
+    try:
+        import edge_tts
+        communicate = edge_tts.Communicate(clean_text, voice, rate=rate, pitch=pitch)
+        audio_bytes = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_bytes += chunk["data"]
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Length": str(len(audio_bytes)),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+    except Exception as e:
+        logging.error(f"Neural TTS failed: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS generation error: {str(e)}")

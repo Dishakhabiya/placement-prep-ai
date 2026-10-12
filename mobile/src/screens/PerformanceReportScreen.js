@@ -34,9 +34,9 @@ export default function PerformanceReportScreen({ route, navigation }) {
         .map((a) => {
           if (!a) return null;
           const ev = a.evaluation || a;
-          // Merge question and followup info if available
           return {
             ...ev,
+            question_id: a.question?.question_id || ev.question_id || a.question_id,
             target_topic: a.question?.target_topic || ev.target_topic,
             question_text: a.question?.question_text || ev.question_text,
             followup: a.followup || null,
@@ -150,8 +150,13 @@ export default function PerformanceReportScreen({ route, navigation }) {
     ];
 
     const breakdown = (questionList || []).map((q) => {
-      const ev = evaluations.find((e) => e.question_id === q.question_id);
-      if (ev) {
+      const ans = (sessionAnswers || []).find((a) => (a.question?.question_id === q.question_id) || (a.question_id === q.question_id));
+      const ev = ans?.evaluation || evaluations.find((e) => e.question_id === q.question_id);
+      const isAnswered = !!ans || (ev && ev.status !== 'unanswered' && ev.status !== 'skipped');
+      if (isAnswered) {
+        const transcriptText = ev?.transcript_metadata?.transcript || ans?.transcript || '';
+        const hasTranscript = !!transcriptText && transcriptText.trim().length > 0;
+        const hasEvaluation = typeof ev?.relevance?.relevance_score === 'number';
         return {
           question_id: q.question_id,
           question_text: q.question_text,
@@ -159,18 +164,22 @@ export default function PerformanceReportScreen({ route, navigation }) {
           category: q.category,
           difficulty: q.difficulty,
           status: 'answered',
-          transcript: ev.transcript_metadata?.transcript || '',
-          relevance_score: ev.relevance?.relevance_score,
-          coverage_score: ev.concept_coverage?.coverage_score,
-          covered_concepts: ev.concept_coverage?.covered_concepts || [],
-          missing_concepts: ev.concept_coverage?.missing_concepts || [],
-          words_per_minute: ev.delivery_metrics?.words_per_minute,
-          filler_word_count: ev.delivery_metrics?.total_filler_words,
-          extended_pause_count: ev.delivery_metrics?.extended_pause_count,
-          face_presence_ratio: ev.visual_metrics?.face_presence_ratio,
-          face_centering_ratio: ev.visual_metrics?.face_centering_ratio,
-          followup_question: ev.followup?.followup_question || null,
-          followup_focus: ev.followup?.focus_area || null,
+          transcript: transcriptText,
+          has_transcript: hasTranscript,
+          has_evaluation: hasEvaluation,
+          transcript_status: hasTranscript ? 'available' : (ans?.isEvaluating ? 'pending' : 'missing'),
+          evaluation_status: hasEvaluation ? 'available' : (ans?.isEvaluating ? 'pending' : 'missing'),
+          relevance_score: ev?.relevance?.relevance_score ?? null,
+          coverage_score: ev?.concept_coverage?.coverage_score ?? null,
+          covered_concepts: ev?.concept_coverage?.covered_concepts || [],
+          missing_concepts: ev?.concept_coverage?.missing_concepts || q.expected_key_concepts || [],
+          words_per_minute: ev?.delivery_metrics?.words_per_minute ?? null,
+          filler_word_count: ev?.delivery_metrics?.total_filler_words ?? null,
+          extended_pause_count: ev?.delivery_metrics?.extended_pause_count ?? null,
+          face_presence_ratio: ev?.visual_metrics?.face_presence_ratio ?? null,
+          face_centering_ratio: ev?.visual_metrics?.face_centering_ratio ?? null,
+          followup_question: ev?.followup?.followup_question || ans?.followup?.followup_question || null,
+          followup_focus: ev?.followup?.focus_area || ans?.followup?.focus_area || null,
         };
       }
       return {
@@ -180,6 +189,13 @@ export default function PerformanceReportScreen({ route, navigation }) {
         category: q.category,
         difficulty: q.difficulty,
         status: 'unanswered',
+        has_transcript: false,
+        has_evaluation: false,
+        transcript_status: 'skipped',
+        evaluation_status: 'skipped',
+        transcript: null,
+        relevance_score: null,
+        coverage_score: null,
         covered_concepts: [],
         missing_concepts: q.expected_key_concepts || [],
       };
@@ -514,31 +530,51 @@ export default function PerformanceReportScreen({ route, navigation }) {
                 {/* Expanded Details */}
                 {isExpanded && isAnswered && (
                   <View style={styles.questionDetails}>
-                    {/* Transcript */}
+                    {/* Transcript Display (Clearly Identifying Missing Transcripts) */}
                     {q.transcript ? (
                       <View style={styles.detailBox}>
                         <Text style={styles.detailLabel}>Candidate Spoken Transcript:</Text>
                         <Text style={styles.detailTranscript}>"{q.transcript}"</Text>
                       </View>
-                    ) : null}
+                    ) : (
+                      <View style={styles.missingDetailBox}>
+                        <Text style={styles.missingDetailLabel}>⚠️ Transcript Missing or Incomplete</Text>
+                        <Text style={styles.missingDetailText}>
+                          {q.transcript_status === 'pending'
+                            ? 'Speech transcription is processing in background...'
+                            : 'No speech was recognized or transcription failed for this answer.'}
+                        </Text>
+                      </View>
+                    )}
 
-                    {/* Scores Row */}
-                    <View style={styles.scoresRow}>
-                      <View style={styles.scorePill}>
-                        <Text style={styles.scorePillLabel}>Relevance:</Text>
-                        <Text style={styles.scorePillVal}>{q.relevance_score ?? 'N/A'}%</Text>
-                      </View>
-                      <View style={styles.scorePill}>
-                        <Text style={styles.scorePillLabel}>Coverage:</Text>
-                        <Text style={styles.scorePillVal}>{q.coverage_score ?? 'N/A'}%</Text>
-                      </View>
-                      {q.words_per_minute !== null && q.words_per_minute !== undefined && (
+                    {/* Scores Row (Clearly Identifying Missing Evaluations) */}
+                    {q.relevance_score !== null && q.relevance_score !== undefined ? (
+                      <View style={styles.scoresRow}>
                         <View style={styles.scorePill}>
-                          <Text style={styles.scorePillLabel}>Pace:</Text>
-                          <Text style={styles.scorePillVal}>{q.words_per_minute} WPM</Text>
+                          <Text style={styles.scorePillLabel}>Relevance:</Text>
+                          <Text style={styles.scorePillVal}>{q.relevance_score}%</Text>
                         </View>
-                      )}
-                    </View>
+                        <View style={styles.scorePill}>
+                          <Text style={styles.scorePillLabel}>Coverage:</Text>
+                          <Text style={styles.scorePillVal}>{q.coverage_score ?? 'N/A'}%</Text>
+                        </View>
+                        {q.words_per_minute !== null && q.words_per_minute !== undefined && (
+                          <View style={styles.scorePill}>
+                            <Text style={styles.scorePillLabel}>Pace:</Text>
+                            <Text style={styles.scorePillVal}>{q.words_per_minute} WPM</Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      <View style={styles.missingDetailBox}>
+                        <Text style={styles.missingDetailLabel}>⚠️ Evaluation Incomplete or Missing</Text>
+                        <Text style={styles.missingDetailText}>
+                          {q.evaluation_status === 'pending'
+                            ? 'Answer evaluation is currently processing in background...'
+                            : 'Quantitative relevance and coverage scores were not returned for this answer.'}
+                        </Text>
+                      </View>
+                    )}
 
                     {/* Concepts Breakdown */}
                     {q.covered_concepts?.length > 0 && (
@@ -998,6 +1034,25 @@ const styles = StyleSheet.create({
     borderTopColor: '#1E293B',
     padding: 12,
     backgroundColor: '#090D16',
+  },
+  missingDetailBox: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  missingDetailLabel: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  missingDetailText: {
+    color: '#FCD34D',
+    fontSize: 11,
+    lineHeight: 15,
   },
   detailBox: {
     marginBottom: 10,

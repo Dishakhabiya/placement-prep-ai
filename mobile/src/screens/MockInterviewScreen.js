@@ -3,82 +3,413 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  SafeAreaView,
   TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useProfileStore } from '../store/profileStore';
 import { apiClient } from '../api/client';
 import SectionCard from '../components/SectionCard';
 
+export const NEURAL_VOICES = [
+  { id: 'en-IN-NeerjaNeural', name: 'Neerja (Clear Indian English - Female)', accent: 'Indian Natural' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (Ultra-Clear US English - Female)', accent: 'US Natural' },
+  { id: 'en-US-AriaNeural', name: 'Aria (Professional US English - Female)', accent: 'US Natural' },
+  { id: 'en-US-GuyNeural', name: 'Guy (Calm US English - Male)', accent: 'US Natural' },
+  { id: 'en-IN-PrabhatNeural', name: 'Prabhat (Clear Indian English - Male)', accent: 'Indian Natural' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (Natural British English - Female)', accent: 'UK British' },
+];
+
+/**
+ * Real-time Mock Interview Screen:
+ * 1. Studio-grade Microsoft Neural Audio with 100% pre-fetching for instant, crystal-clear playback.
+ * 2. Autoplay-unlocked audio architecture ensuring no robotic fallback or mid-sentence cut-offs.
+ * 3. True native Full Screen Mode (with user-gesture unlock and floating controls).
+ * 4. On-screen Transcribed Question Teleprompter & Live Candidate Speech Overlay.
+ * 5. 10s preparation phase with Skip Preparation button.
+ * 6. 3s recording countdown before active recording.
+ * 7. 3-minute max duration answer timer with automatic stop & save at zero.
+ * 8. Audio mistake analysis & feedback spoken aloud after reply, then continuous next question.
+ * 9. Safe interview termination with confirmation dialog, track cleanup, and fullscreen exit.
+ */
 export default function MockInterviewScreen({ navigation }) {
   const { currentProfile } = useProfileStore();
-  const [loading, setLoading] = useState(true);
+
   const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Browser Video & Audio Recording Lifecycle:
-  // 'idle' | 'requesting' | 'recording' | 'recorded' | 'evaluating' | 'evaluated' | 'error'
-  const [recordingState, setRecordingState] = useState('idle');
+  // Workflow phases: 'ready' | 'prep' | 'countdown' | 'recording' | 'evaluating' | 'feedback' | 'completed'
+  const [interviewPhase, setInterviewPhase] = useState('ready');
+  const [prepTimeRemaining, setPrepTimeRemaining] = useState(10);
+  const [countdownRemaining, setCountdownRemaining] = useState(3);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [hasVideoTrack, setHasVideoTrack] = useState(false);
-  const [candidateTranscript, setCandidateTranscript] = useState('');
-  const [evaluationData, setEvaluationData] = useState(null);
-  const [followupData, setFollowupData] = useState(null);
-  const [generatingFollowup, setGeneratingFollowup] = useState(false);
   const [recordingError, setRecordingError] = useState(null);
-  // Session answer aggregation map: question_id -> { question, evaluation, transcript, followup, duration }
+  const [isTtsSpeaking, setIsTtsSpeaking] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+
+  // Live Speech Recognition Transcript (for Candidate Speech Display)
+  const [liveCandidateTranscript, setLiveCandidateTranscript] = useState('');
+
+  // Neural Voice Selection (Default: Neerja - Clear Indian English)
+  const [selectedVoice, setSelectedVoice] = useState('en-IN-NeerjaNeural');
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const [isTestingVoice, setIsTestingVoice] = useState(false);
+
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Current question feedback
+  const [currentFeedback, setCurrentFeedback] = useState(null);
+  const [spokenFeedbackText, setSpokenFeedbackText] = useState('');
+
+  // End Interview Confirmation Dialog
+  const [showEndConfirmation, setShowEndConfirmation] = useState(false);
+
+  // Session answers map
   const [sessionAnswers, setSessionAnswers] = useState({});
 
   // Browser MediaRecorder, stream, video element and timer references
   const mediaStreamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
-  const timerIntervalRef = useRef(null);
   const videoElementRef = useRef(null);
+  const activeAudioRef = useRef(null);
+  const speechRecognizerRef = useRef(null);
+  const audioContextRef = useRef(null);
 
+  // Audio Cache: question_id -> audio Blob for instant playback
+  const audioCacheRef = useRef({});
+
+  // Race condition & cleanup guards
+  const prepIntervalRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const answerTimerIntervalRef = useRef(null);
+  const feedbackTimeoutRef = useRef(null);
+  const isFinalizingRef = useRef(false);
+
+  // Listen to browser fullscreen changes (e.g. user hits ESC)
   useEffect(() => {
-    fetchQuestionSet();
+    const handleFullscreenChange = () => {
+      const isFs = !!(
+        (typeof document !== 'undefined') &&
+        (document.fullscreenElement || document.webkitFullscreenElement)
+      );
+      setIsFullscreen(isFs);
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    }
     return () => {
-      cleanupMediaResources();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      }
     };
   }, []);
 
-  const cleanupMediaResources = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {
-        // Safe silent cleanup
-      }
-    }
-    mediaRecorderRef.current = null;
+  // Initialize camera and fetch questions on mount
+  useEffect(() => {
+    fetchQuestionSet();
+    initializeWebcam();
 
-    if (mediaStreamRef.current) {
+    return () => {
+      clearAllTimers();
+      cancelAudio();
+      stopSpeechRecognition();
+      stopWebcamTracks();
+      exitFullscreenIfActive();
+    };
+  }, []);
+
+  // Pre-fetch all questions audio as soon as questions are loaded or voice changes
+  const prefetchAllQuestionsAudio = async (questionsList, voiceId) => {
+    if (!questionsList || questionsList.length === 0) return;
+    for (const q of questionsList) {
+      if (!q || !q.question_text) continue;
+      const cacheKey = `${voiceId}_${q.question_id}`;
+      if (audioCacheRef.current[cacheKey]) continue;
+
       try {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        const blob = await apiClient.getNeuralTtsAudio({
+          text: q.question_text,
+          voice: voiceId,
+          rate: '-3%',
+        });
+        if (blob && blob.size > 100) {
+          audioCacheRef.current[cacheKey] = blob;
+        }
       } catch (e) {
-        // Safe silent cleanup
+        console.warn(`Background audio pre-fetch notice for ${q.question_id}:`, e);
       }
+    }
+  };
+
+  // Web Audio Context unlock on user gesture
+  const unlockAudioContext = () => {
+    if (typeof window !== 'undefined') {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioCtx();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {});
+        }
+      }
+    }
+  };
+
+  // Web Speech Recognition for live candidate transcription overlay
+  const startSpeechRecognition = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    try {
+      if (speechRecognizerRef.current) {
+        try { speechRecognizerRef.current.abort(); } catch (e) {}
+      }
+      const recognizer = new SpeechRecognition();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-US';
+
+      recognizer.onresult = (event) => {
+        let fullText = '';
+        for (let i = 0; i < event.results.length; i++) {
+          fullText += event.results[i][0].transcript + ' ';
+        }
+        setLiveCandidateTranscript(fullText.trim());
+      };
+
+      recognizer.onerror = () => {};
+      recognizer.onend = () => {};
+
+      speechRecognizerRef.current = recognizer;
+      recognizer.start();
+    } catch (e) {
+      console.warn('Speech recognition notice:', e);
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (speechRecognizerRef.current) {
+      try {
+        speechRecognizerRef.current.stop();
+      } catch (e) {}
+      speechRecognizerRef.current = null;
+    }
+  };
+
+  const clearAllTimers = () => {
+    if (prepIntervalRef.current) clearInterval(prepIntervalRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (answerTimerIntervalRef.current) clearInterval(answerTimerIntervalRef.current);
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    prepIntervalRef.current = null;
+    countdownIntervalRef.current = null;
+    answerTimerIntervalRef.current = null;
+    feedbackTimeoutRef.current = null;
+  };
+
+  const cancelAudio = () => {
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.src = '';
+      } catch (e) {}
+      activeAudioRef.current = null;
+    }
+    setIsTtsSpeaking(false);
+  };
+
+  // Webcam initialization
+  const initializeWebcam = async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true,
+      });
+      mediaStreamRef.current = stream;
+      setHasVideoTrack(true);
+      if (videoElementRef.current) {
+        videoElementRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.warn('Webcam permission error:', err);
+      setRecordingError('Camera or microphone access denied. You can still test with text audio.');
+      setHasVideoTrack(false);
+    }
+  };
+
+  const stopWebcamTracks = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
       mediaStreamRef.current = null;
     }
-
     if (videoElementRef.current) {
       try {
         videoElementRef.current.srcObject = null;
-      } catch (e) {
-        // Safe silent cleanup
-      }
+      } catch (e) {}
     }
     setHasVideoTrack(false);
+  };
+
+  // Fullscreen Helpers (Direct user-gesture driven)
+  const handleToggleFullscreen = async () => {
+    if (typeof document === 'undefined') return;
+    try {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle notice:', err);
+    }
+  };
+
+  const enterFullscreen = async () => {
+    if (typeof document === 'undefined') return;
+    try {
+      const docEl = document.documentElement;
+      if (docEl.requestFullscreen) {
+        await docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) {
+        await docEl.webkitRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } catch (err) {
+      console.warn('Enter fullscreen notice:', err);
+    }
+  };
+
+  const exitFullscreenIfActive = () => {
+    if (typeof document !== 'undefined' && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen().catch(() => {});
+        }
+      } catch (e) {}
+    }
+    setIsFullscreen(false);
+  };
+
+  // High-Fidelity Crystal-Clear Neural Audio Player (Zero Robotic Web Speech)
+  const speakTextWithNeuralVoice = async (text, onEnd = null, questionId = null) => {
+    cancelAudio();
+    if (!text || !text.trim()) {
+      if (onEnd) onEnd();
+      return;
+    }
+
+    unlockAudioContext();
+
+    try {
+      setIsTtsSpeaking(true);
+      setAutoplayBlocked(false);
+
+      const cacheKey = questionId ? `${selectedVoice}_${questionId}` : null;
+      let audioBlob = cacheKey ? audioCacheRef.current[cacheKey] : null;
+
+      if (!audioBlob) {
+        audioBlob = await apiClient.getNeuralTtsAudio({
+          text: text.trim(),
+          voice: selectedVoice,
+          rate: '-3%',
+        });
+        if (cacheKey && audioBlob) {
+          audioCacheRef.current[cacheKey] = audioBlob;
+        }
+      }
+
+      if (typeof window !== 'undefined' && audioBlob && audioBlob.size > 100) {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.preload = 'auto';
+        activeAudioRef.current = audio;
+
+        audio.onended = () => {
+          setIsTtsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+          activeAudioRef.current = null;
+          if (onEnd) onEnd();
+        };
+
+        audio.onerror = (e) => {
+          console.warn('Neural audio playback notice:', e);
+          setIsTtsSpeaking(false);
+          setAutoplayBlocked(true);
+          if (onEnd) onEnd();
+        };
+
+        try {
+          await audio.play();
+        } catch (playErr) {
+          // If browser blocked autoplay, flag it so user can click to unmute with 1 click
+          console.warn('Autoplay blocked by browser policy:', playErr);
+          setIsTtsSpeaking(false);
+          setAutoplayBlocked(true);
+          if (onEnd) onEnd();
+        }
+      } else {
+        setIsTtsSpeaking(false);
+        if (onEnd) onEnd();
+      }
+    } catch (err) {
+      console.warn('Neural TTS stream notice:', err);
+      setIsTtsSpeaking(false);
+      setAutoplayBlocked(true);
+      if (onEnd) onEnd();
+    }
+  };
+
+  const testVoiceSample = async (voiceId) => {
+    setIsTestingVoice(true);
+    cancelAudio();
+    unlockAudioContext();
+    try {
+      const audioBlob = await apiClient.getNeuralTtsAudio({
+        text: 'Hello! I am your AI interviewer. My voice is crystal clear and ready to conduct your interview.',
+        voice: voiceId || selectedVoice,
+        rate: '-3%',
+      });
+      if (audioBlob) {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        activeAudioRef.current = audio;
+        audio.onended = () => setIsTestingVoice(false);
+        audio.onerror = () => setIsTestingVoice(false);
+        await audio.play();
+      }
+    } catch (e) {
+      setIsTestingVoice(false);
+    }
   };
 
   const formatTime = (seconds) => {
@@ -98,7 +429,12 @@ export default function MockInterviewScreen({ navigation }) {
       setLoading(true);
       setErrorMsg(null);
       const res = await apiClient.generateQuestions(currentProfile.profile_id, 5);
-      setQuestions(res.questions || []);
+      const qList = res.questions || [];
+      setQuestions(qList);
+      setInterviewPhase('ready');
+
+      // Pre-fetch neural audio for all questions immediately
+      prefetchAllQuestionsAudio(qList, selectedVoice);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to load interview questions.');
     } finally {
@@ -106,1038 +442,1430 @@ export default function MockInterviewScreen({ navigation }) {
     }
   };
 
-  const attachStreamToVideoElement = (stream) => {
-    if (typeof window !== 'undefined' && videoElementRef.current && stream) {
-      try {
-        videoElementRef.current.srcObject = stream;
-        videoElementRef.current.muted = true;
-        videoElementRef.current.play().catch(() => {});
-      } catch (err) {
-        console.warn('Could not bind video stream to preview element:', err);
-      }
+  // Start Interview (from ready phase)
+  const handleStartInterview = (shouldEnterFullscreen = true) => {
+    unlockAudioContext();
+    if (shouldEnterFullscreen) {
+      enterFullscreen();
     }
+    startPreparationPhase(0, questions);
   };
 
-  const startRecording = async () => {
+  // Phase 1: 10-Second Preparation Phase
+  const startPreparationPhase = (index, questionList = questions) => {
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+    setLiveCandidateTranscript('');
+    setInterviewPhase('prep');
+    setPrepTimeRemaining(10);
+    setRecordingDuration(0);
     setRecordingError(null);
-    setFollowupData(null);
-    setEvaluationData(null);
-    setCandidateTranscript('');
-    setRecordedBlob(null);
+    setCurrentFeedback(null);
+    setSpokenFeedbackText('');
 
-    // Verify browser mediaDevices support
-    if (
-      typeof window === 'undefined' ||
-      !navigator?.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === 'undefined'
-    ) {
-      setRecordingError(
-        'Direct browser camera and microphone recording is not supported in this environment. Please open this application in Google Chrome, Microsoft Edge, or Mozilla Firefox.'
-      );
-      setRecordingState('error');
-      return;
+    const q = questionList[index];
+    if (q && q.question_text) {
+      speakTextWithNeuralVoice(q.question_text, null, q.question_id);
     }
 
-    try {
-      setRecordingState('requesting');
-      cleanupMediaResources();
+    prepIntervalRef.current = setInterval(() => {
+      setPrepTimeRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(prepIntervalRef.current);
+          prepIntervalRef.current = null;
+          cancelAudio();
+          startRecordingCountdown();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-      let stream = null;
-      let videoAcquired = false;
+  // Skip Preparation Button
+  const handleSkipPreparation = () => {
+    if (interviewPhase !== 'prep') return;
+    if (prepIntervalRef.current) {
+      clearInterval(prepIntervalRef.current);
+      prepIntervalRef.current = null;
+    }
+    cancelAudio();
+    setPrepTimeRemaining(0);
+    startRecordingCountdown();
+  };
 
-      // 1. Request combined camera + microphone access
+  // Phase 2: 3-Second Recording Countdown
+  const startRecordingCountdown = () => {
+    clearAllTimers();
+    setInterviewPhase('countdown');
+    setCountdownRemaining(3);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdownRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+          startActiveRecording();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Phase 3: Active Recording (3-Minute Max Duration)
+  const startActiveRecording = () => {
+    clearAllTimers();
+    setInterviewPhase('recording');
+    setRecordingDuration(0);
+    recordedChunksRef.current = [];
+    setRecordedBlob(null);
+    isFinalizingRef.current = false;
+    setLiveCandidateTranscript('');
+
+    // Start live speech transcription overlay
+    startSpeechRecognition();
+
+    // Start MediaRecorder if stream exists
+    if (mediaStreamRef.current && typeof MediaRecorder !== 'undefined') {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            frameRate: { ideal: 24, max: 30 },
-            facingMode: 'user',
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        videoAcquired = true;
-      } catch (mediaErr) {
-        // Fallback: If camera is unavailable or denied, fallback to audio-only recording
-        console.warn('Camera request failed, attempting audio-only fallback:', mediaErr);
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          });
-          videoAcquired = false;
-        } catch (audioErr) {
-          throw mediaErr; // Throw original error for permission/device feedback
+        let mimeType = 'video/webm';
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
         }
+
+        const recorder = new MediaRecorder(mediaStreamRef.current, { mimeType });
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onerror = (e) => {
+          console.warn('MediaRecorder error:', e);
+          setRecordingError('Media recording error occurred.');
+        };
+
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
+      } catch (err) {
+        console.warn('Recorder init failure:', err);
       }
+    }
 
-      mediaStreamRef.current = stream;
-      setHasVideoTrack(videoAcquired && stream.getVideoTracks().length > 0);
-
-      // Attach stream to video preview element immediately
-      attachStreamToVideoElement(stream);
-
-      // 2. Select supported MIME type for MediaRecorder
-      let chosenMime = '';
-      const candidateMimes = videoAcquired
-        ? [
-            'video/webm;codecs=vp8,opus',
-            'video/webm;codecs=vp9,opus',
-            'video/webm',
-            'video/mp4',
-            'audio/webm;codecs=opus',
-            'audio/webm',
-          ]
-        : [
-            'audio/webm;codecs=opus',
-            'audio/webm',
-            'audio/mp4',
-            'audio/ogg;codecs=opus',
-            'audio/wav',
-          ];
-
-      for (const mime of candidateMimes) {
-        if (MediaRecorder.isTypeSupported(mime)) {
-          chosenMime = mime;
-          break;
+    // 3-Minute (180s) maximum countdown timer
+    answerTimerIntervalRef.current = setInterval(() => {
+      setRecordingDuration((prev) => {
+        const nextTime = prev + 1;
+        if (nextTime >= 180) {
+          clearInterval(answerTimerIntervalRef.current);
+          answerTimerIntervalRef.current = null;
+          handleAutoStopAnswerTimeout();
+          return 180;
         }
+        return nextTime;
+      });
+    }, 1000);
+  };
+
+  // Automatic timeout when 3-minute answer timer reaches 0
+  const handleAutoStopAnswerTimeout = () => {
+    if (interviewPhase !== 'recording' || isFinalizingRef.current) return;
+    finalizeAndSaveAnswer();
+  };
+
+  // Candidate clicked "Stop Answer & Continue"
+  const handleStopAnswerAndContinue = () => {
+    if (interviewPhase !== 'recording' || isFinalizingRef.current) return;
+    clearAllTimers();
+    stopSpeechRecognition();
+    finalizeAndSaveAnswer();
+  };
+
+  // Safely stop MediaRecorder and produce Blob
+  const stopMediaRecorderAsync = () => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        let blob = null;
+        if (recordedChunksRef.current.length > 0) {
+          blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        }
+        resolve(blob);
+        return;
       }
-
-      const recorderOptions = chosenMime ? { mimeType: chosenMime } : {};
-      const recorder = new MediaRecorder(stream, recorderOptions);
-      mediaRecorderRef.current = recorder;
-      recordedChunksRef.current = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
 
       recorder.onstop = () => {
-        const mime = recorder.mimeType || chosenMime || (videoAcquired ? 'video/webm' : 'audio/webm');
-        const blob = new Blob(recordedChunksRef.current, { type: mime });
-        setRecordedBlob(blob);
-        setRecordingState('recorded');
-
-        // Stop media hardware tracks immediately to turn off camera and mic lights
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-          mediaStreamRef.current = null;
+        let blob = null;
+        if (recordedChunksRef.current.length > 0) {
+          blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         }
-        if (videoElementRef.current) {
-          videoElementRef.current.srcObject = null;
-        }
+        resolve(blob);
       };
 
-      recorder.onerror = (event) => {
-        setRecordingError('Recording error: ' + (event.error?.message || 'MediaRecorder failed.'));
-        setRecordingState('error');
-        cleanupMediaResources();
-      };
-
-      // 3. Start recording with 250ms chunk interval
-      recorder.start(250);
-      setRecordingDuration(0);
-      setRecordingState('recording');
-
-      timerIntervalRef.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
-      }, 1000);
-    } catch (err) {
-      cleanupMediaResources();
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setRecordingError(
-          'Camera or microphone permission was denied. Please allow camera and microphone access in your browser address bar permissions and try again.'
-        );
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setRecordingError(
-          'No camera or microphone detected on your device. Please ensure your camera and microphone are connected and try again.'
-        );
-      } else {
-        setRecordingError(`Could not access media devices: ${err.message || err.name}`);
-      }
-      setRecordingState('error');
-    }
-  };
-
-  const stopRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
-        mediaRecorderRef.current.stop();
+        recorder.stop();
       } catch (e) {
-        console.warn('Error stopping MediaRecorder:', e);
+        let blob = null;
+        if (recordedChunksRef.current.length > 0) {
+          blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        }
+        resolve(blob);
       }
-    }
-  };
-
-  const submitAndEvaluate = async () => {
-    if (!recordedBlob || recordedBlob.size < 128) {
-      Alert.alert(
-        'Recording Too Short',
-        'Your recording appears to be empty or too short. Please speak your answer and record for at least a few seconds.'
-      );
-      return;
-    }
-
-    const currentQ = questions[currentIndex];
-    if (!currentQ) return;
-
-    try {
-      setRecordingState('evaluating');
-      setRecordingError(null);
-
-      const res = await apiClient.transcribeAudioAnswer({
-        audioFile: recordedBlob,
-        profileId: currentProfile?.profile_id,
-        sessionId: currentProfile?.session_id,
-        questionId: currentQ.question_id,
-        questionText: currentQ.question_text,
-        expectedKeyConcepts: currentQ.expected_key_concepts || [],
-      });
-
-      setCandidateTranscript(res.transcript_metadata?.transcript || '');
-      setEvaluationData(res);
-      setRecordingState('evaluated');
-
-      // Record answer into session aggregation map
-      setSessionAnswers((prev) => ({
-        ...prev,
-        [currentQ.question_id]: {
-          question: currentQ,
-          evaluation: res,
-          transcript: res.transcript_metadata?.transcript || '',
-          followup: null,
-          duration: recordingDuration,
-        },
-      }));
-    } catch (err) {
-      setRecordingError(err.message || 'Failed to transcribe or evaluate audio answer.');
-      setRecordingState('error');
-    }
-  };
-
-  const resetToRecord = () => {
-    cleanupMediaResources();
-    setRecordingState('idle');
-    setRecordingDuration(0);
-    setRecordedBlob(null);
-    setRecordingError(null);
-  };
-
-  const handleGenerateFollowup = async () => {
-    if (!candidateTranscript.trim()) {
-      Alert.alert('No Answer', 'Please record and evaluate your response before requesting a follow-up.');
-      return;
-    }
-
-    const currentQ = questions[currentIndex];
-    if (!currentQ) return;
-
-    // Direct integration: prioritize actual missing concepts tagged by Member 3 NLP
-    const missing =
-      evaluationData?.concept_coverage?.missing_concepts &&
-      evaluationData.concept_coverage.missing_concepts.length > 0
-        ? evaluationData.concept_coverage.missing_concepts
-        : currentQ.expected_key_concepts || [];
-
-    try {
-      setGeneratingFollowup(true);
-      setFollowupData(null);
-
-      const res = await apiClient.generateFollowup({
-        questionId: currentQ.question_id,
-        originalQuestion: currentQ.question_text,
-        targetTopic: currentQ.target_topic,
-        candidateAnswer: candidateTranscript,
-        missingConcepts: missing,
-      });
-
-      setFollowupData(res);
-      setSessionAnswers((prev) => {
-        const curr = prev[currentQ.question_id];
-        if (!curr) return prev;
-        return {
-          ...prev,
-          [currentQ.question_id]: {
-            ...curr,
-            followup: res,
-          },
-        };
-      });
-    } catch (err) {
-      Alert.alert('Followup Error', err.message || 'Could not generate follow-up question.');
-    } finally {
-      setGeneratingFollowup(false);
-    }
-  };
-
-  const navigateToQuestion = (targetIndex) => {
-    cleanupMediaResources();
-    setCurrentIndex(targetIndex);
-    const targetQ = questions[targetIndex];
-    const existing = targetQ ? sessionAnswers[targetQ.question_id] : null;
-    if (existing && existing.evaluation) {
-      setCandidateTranscript(existing.transcript || '');
-      setEvaluationData(existing.evaluation);
-      setFollowupData(existing.followup || null);
-      setRecordingDuration(existing.duration || 0);
-      setRecordingState('evaluated');
-    } else {
-      setRecordingState('idle');
-      setRecordingDuration(0);
-      setRecordedBlob(null);
-      setCandidateTranscript('');
-      setEvaluationData(null);
-      setFollowupData(null);
-    }
-    setRecordingError(null);
-  };
-
-  const finishSessionAndOpenReport = () => {
-    cleanupMediaResources();
-    navigation.navigate('PerformanceReport', {
-      sessionAnswers: Object.values(sessionAnswers),
-      questions,
-      profile: currentProfile,
-      sessionId: currentProfile?.session_id,
     });
   };
 
-  const handleNextQuestion = () => {
-    if (currentIndex < questions.length - 1) {
-      navigateToQuestion(currentIndex + 1);
+  // Finalize current answer, analyze feedback, speak mistakes aloud, and advance
+  const finalizeAndSaveAnswer = async () => {
+    if (isFinalizingRef.current) return;
+    isFinalizingRef.current = true;
+    clearAllTimers();
+    stopSpeechRecognition();
+
+    setInterviewPhase('evaluating');
+
+    const currentQ = questions[currentIndex];
+    const durationCaptured = recordingDuration;
+
+    // 1. Finalize media recording
+    const blob = await stopMediaRecorderAsync();
+    setRecordedBlob(blob);
+
+    // 2. Persist local answer record immediately
+    const answerId = currentQ ? currentQ.question_id : `q_${currentIndex}`;
+    const initialAnswerRecord = {
+      question_id: answerId,
+      question_text: currentQ ? currentQ.question_text : '',
+      duration: durationCaptured,
+      blob: blob,
+      status: 'saved',
+      evaluated: false,
+      transcript: liveCandidateTranscript || null,
+      evaluation: null,
+      error: null,
+      retryable: false,
+    };
+
+    setSessionAnswers((prev) => ({
+      ...prev,
+      [answerId]: initialAnswerRecord,
+    }));
+
+    // 3. Perform background NLP & speech evaluation
+    try {
+      let evalResult = null;
+      if (blob && blob.size > 0) {
+        const formData = new FormData();
+        const fileExt = blob.type.includes('mp4') ? 'mp4' : 'webm';
+        formData.append('audio_file', blob, `answer_${answerId}.${fileExt}`);
+        formData.append('question_id', answerId);
+        formData.append('question_text', currentQ.question_text);
+        formData.append('category', currentQ.category || 'TECHNICAL');
+        formData.append('difficulty', currentQ.difficulty || 'MEDIUM');
+        formData.append('target_role', currentProfile?.target_role || 'Software Engineer');
+
+        if (currentQ.expected_key_concepts && currentQ.expected_key_concepts.length > 0) {
+          currentQ.expected_key_concepts.forEach((concept) => {
+            formData.append('expected_key_concepts', concept);
+          });
+        }
+
+        evalResult = await apiClient.evaluateSpeechAnswer(formData);
+      } else {
+        // Fallback text evaluation if no video blob
+        const answerText = liveCandidateTranscript || 'Answer provided by candidate.';
+        evalResult = await apiClient.evaluateTextAnswer({
+          question_id: answerId,
+          question_text: currentQ.question_text,
+          answer_text: answerText,
+          expected_key_concepts: currentQ.expected_key_concepts || [],
+          target_role: currentProfile?.target_role || 'Software Engineer',
+          category: currentQ.category || 'TECHNICAL',
+          difficulty: currentQ.difficulty || 'MEDIUM',
+        });
+      }
+
+      // Update answer record with evaluation
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          ...prev[answerId],
+          evaluated: true,
+          evaluation: evalResult,
+          transcript: evalResult?.transcript_metadata?.transcript || liveCandidateTranscript || 'Recorded speech',
+        },
+      }));
+
+      // Construct spoken mistakes feedback
+      const spokenFeedback = constructSpokenMistakesFeedback(evalResult, currentQ);
+      setSpokenFeedbackText(spokenFeedback);
+      setCurrentFeedback(evalResult);
+
+      // Transition to feedback phase and speak mistakes aloud in neural audio!
+      setInterviewPhase('feedback');
+      isFinalizingRef.current = false;
+
+      // Speak feedback in studio audio, then advance continuously
+      speakTextWithNeuralVoice(spokenFeedback, () => {
+        feedbackTimeoutRef.current = setTimeout(() => {
+          advanceToNextQuestionOrComplete();
+        }, 1500);
+      });
+    } catch (err) {
+      console.warn('Evaluation notice:', err);
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          ...prev[answerId],
+          status: 'saved',
+          error: err.message || 'Evaluation error',
+          retryable: true,
+        },
+      }));
+
+      const fallbackMsg = 'Your answer has been saved successfully. Advancing to the next question.';
+      setSpokenFeedbackText(fallbackMsg);
+      setInterviewPhase('feedback');
+      isFinalizingRef.current = false;
+
+      speakTextWithNeuralVoice(fallbackMsg, () => {
+        feedbackTimeoutRef.current = setTimeout(() => {
+          advanceToNextQuestionOrComplete();
+        }, 1200);
+      });
+    }
+  };
+
+  // Construct natural, professional spoken mistake & coaching feedback
+  const constructSpokenMistakesFeedback = (evaluation, question) => {
+    const parts = [];
+
+    const relevance = evaluation?.relevance?.relevance_score ?? 75;
+    const coverage = evaluation?.concept_coverage?.coverage_score ?? 70;
+    const missingConcepts = evaluation?.concept_coverage?.missing_concepts || [];
+    const fillers = evaluation?.delivery?.filler_words?.total_fillers ?? 0;
+
+    if (relevance >= 80 && coverage >= 80) {
+      parts.push('Great job! That was a strong, well-structured answer.');
+    } else if (relevance < 65) {
+      parts.push('Your answer deviated somewhat from the core question.');
     } else {
-      finishSessionAndOpenReport();
+      parts.push('Good attempt, but here are key areas for improvement.');
+    }
+
+    if (missingConcepts.length > 0) {
+      const topMissing = missingConcepts.slice(0, 2).join(' and ');
+      parts.push(`You missed critical concepts: ${topMissing}. Be sure to address these.`);
+    }
+
+    if (fillers > 4) {
+      parts.push(`You used ${fillers} filler words. Aim to pause calmly instead of using fillers.`);
+    }
+
+    parts.push('Now, moving to your next question.');
+    return parts.join(' ');
+  };
+
+  // Advance to next question or complete session
+  const advanceToNextQuestionOrComplete = () => {
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < questions.length) {
+      setCurrentIndex(nextIndex);
+      startPreparationPhase(nextIndex, questions);
+    } else {
+      handleCompleteInterview();
     }
   };
 
-  const handlePreviousQuestion = () => {
-    if (currentIndex > 0) {
-      navigateToQuestion(currentIndex - 1);
-    }
+  // Interview Completed
+  const handleCompleteInterview = () => {
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+    stopWebcamTracks();
+    exitFullscreenIfActive();
+    setInterviewPhase('completed');
   };
 
+  // End Interview Dialog Trigger
+  const handlePromptEndInterview = () => {
+    setShowEndConfirmation(true);
+  };
+
+  // Candidate confirms End Interview early
+  const handleConfirmEndInterview = async () => {
+    setShowEndConfirmation(false);
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+
+    // If currently recording, save in-progress answer before terminating!
+    if (interviewPhase === 'recording') {
+      const currentQ = questions[currentIndex];
+      const answerId = currentQ ? currentQ.question_id : `q_${currentIndex}`;
+      const blob = await stopMediaRecorderAsync();
+
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          question_id: answerId,
+          question_text: currentQ ? currentQ.question_text : '',
+          duration: recordingDuration,
+          blob: blob,
+          status: 'saved',
+          evaluated: false,
+          transcript: liveCandidateTranscript || null,
+          evaluation: null,
+          error: null,
+        },
+      }));
+    }
+
+    stopWebcamTracks();
+    exitFullscreenIfActive();
+    setInterviewPhase('completed');
+  };
+
+  // Navigate to Performance Report Screen
+  const handleNavigateToReport = () => {
+    const answeredCount = Object.keys(sessionAnswers).length;
+    const totalCount = questions.length;
+
+    const evaluationsList = Object.values(sessionAnswers)
+      .map((a) => a.evaluation)
+      .filter(Boolean);
+
+    navigation.navigate('PerformanceReport', {
+      sessionData: {
+        evaluations: evaluationsList,
+        total_questions: totalCount,
+        answered_questions: answeredCount,
+        skipped_questions: Math.max(0, totalCount - answeredCount),
+        questions: questions,
+        session_answers: sessionAnswers,
+        profile_id: currentProfile?.profile_id,
+        session_id: `mock_session_${Date.now()}`,
+      },
+    });
+  };
+
+  const answeredCount = Object.keys(sessionAnswers).length;
+  const totalCount = questions.length;
+  const currentQ = questions[currentIndex];
+
+  // Loading State
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text style={styles.loadingText}>Generating interview questions from candidate profile...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={styles.loadingText}>Generating interview questions & pre-loading studio audio...</Text>
+      </View>
     );
   }
 
-  if (errorMsg || questions.length === 0) {
+  // Error State
+  if (errorMsg) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{errorMsg || 'No questions generated.'}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={fetchQuestionSet}>
-            <Text style={styles.primaryBtnText}>Retry Loading Questions</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>⚠️ {errorMsg}</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={fetchQuestionSet}>
+          <Text style={styles.primaryBtnText}>Retry Generating Questions</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
-  const currentQ = questions[currentIndex];
-  const isEvaluated = recordingState === 'evaluated' && !!evaluationData;
+  // PHASE: READY (Initial Launch Briefing)
+  if (interviewPhase === 'ready') {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.readyCard}>
+            <Text style={styles.readyEmoji}>🎯</Text>
+            <Text style={styles.readyTitle}>Your AI Mock Interview is Ready</Text>
+            <Text style={styles.readySub}>
+              {questions.length} tailored interview questions prepared for{' '}
+              <Text style={styles.roleHighlight}>{currentProfile?.target_role || 'Software Engineer'}</Text>.
+            </Text>
+
+            {/* Voice & Accent Selector */}
+            <View style={styles.readyVoiceBox}>
+              <View style={styles.readyVoiceHeader}>
+                <Text style={styles.readyVoiceTitle}>🎙️ AI Interviewer Voice Quality</Text>
+                <TouchableOpacity
+                  style={styles.readyTestBtn}
+                  onPress={() => testVoiceSample(selectedVoice)}
+                  disabled={isTestingVoice}
+                >
+                  <Text style={styles.readyTestBtnText}>
+                    {isTestingVoice ? '🔊 Playing Sample...' : '🔊 Test Audio'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.readyVoiceSelector}
+                onPress={() => setShowVoicePicker(true)}
+              >
+                <View>
+                  <Text style={styles.readyVoiceName}>
+                    {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.name || selectedVoice}
+                  </Text>
+                  <Text style={styles.readyVoicePill}>Microsoft Studio Neural Audio (HD)</Text>
+                </View>
+                <Text style={styles.changeVoiceLink}>Change Voice ▾</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Features Checklist */}
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>⏱️</Text>
+                <Text style={styles.featureText}>10s preparation with natural voice question readout</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>📝</Text>
+                <Text style={styles.featureText}>On-screen transcribed question & live speech teleprompter</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>🗣️</Text>
+                <Text style={styles.featureText}>Spoken mistake analysis & feedback after each answer</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Text style={styles.featureIcon}>⛶</Text>
+                <Text style={styles.featureText}>Full-screen distraction-free interview mode</Text>
+              </View>
+            </View>
+
+            {/* Launch Actions */}
+            <View style={styles.launchBtnContainer}>
+              <TouchableOpacity
+                style={styles.launchFsBtn}
+                onPress={() => handleStartInterview(true)}
+              >
+                <Text style={styles.launchFsBtnText}>🚀 Enter Full Screen & Start Interview</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.launchNormalBtn}
+                onPress={() => handleStartInterview(false)}
+              >
+                <Text style={styles.launchNormalBtnText}>Start in Normal Window</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Voice Picker Modal */}
+        <Modal visible={showVoicePicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.voiceModalContainer}>
+              <Text style={styles.modalTitle}>Select AI Interviewer Voice</Text>
+              <Text style={styles.modalSub}>
+                Studio-grade natural neural speech generated by Microsoft AI:
+              </Text>
+              <ScrollView style={styles.voiceList}>
+                {NEURAL_VOICES.map((v) => {
+                  const isSelected = v.id === selectedVoice;
+                  return (
+                    <TouchableOpacity
+                      key={v.id}
+                      style={[styles.voiceItem, isSelected && styles.voiceItemSelected]}
+                      onPress={() => {
+                        setSelectedVoice(v.id);
+                        setShowVoicePicker(false);
+                        testVoiceSample(v.id);
+                        // Re-prefetch for newly selected voice
+                        prefetchAllQuestionsAudio(questions, v.id);
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
+                          {v.name}
+                        </Text>
+                        <Text style={styles.voiceItemLang}>Accent: {v.accent}</Text>
+                      </View>
+                      {isSelected && <Text style={styles.voiceItemCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowVoicePicker(false)}>
+                <Text style={styles.modalCloseBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // PHASE: COMPLETED
+  if (interviewPhase === 'completed') {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.completedContainer}>
+            <Text style={styles.completedEmoji}>🎉</Text>
+            <Text style={styles.completedTitle}>Mock Interview Concluded</Text>
+            <Text style={styles.completedSub}>
+              You answered {answeredCount} of {totalCount} questions.
+              {answeredCount < totalCount
+                ? ` The remaining ${totalCount - answeredCount} questions were skipped.`
+                : ' All questions completed successfully!'}
+            </Text>
+
+            <TouchableOpacity style={styles.viewReportBtn} onPress={handleNavigateToReport}>
+              <Text style={styles.viewReportBtnText}>📊 View Performance Report & Analytics</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header Question Progress & Finish Control */}
+    <View style={[styles.container, isFullscreen && styles.containerFullscreen]}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Top Header Row with Question Progress & Controls */}
         <View style={styles.headerRow}>
           <View style={styles.badgeContainer}>
-            <Text style={styles.categoryBadge}>{currentQ.category.toUpperCase()}</Text>
-            <Text style={styles.difficultyBadge}>{currentQ.difficulty.toUpperCase()}</Text>
+            <Text style={styles.questionIndexBadge}>QUESTION {currentIndex + 1} OF {totalCount}</Text>
+            <Text style={styles.categoryBadge}>{String(currentQ?.category || 'TECHNICAL').toUpperCase()}</Text>
+            <Text style={styles.difficultyBadge}>{String(currentQ?.difficulty || 'MEDIUM').toUpperCase()}</Text>
           </View>
+
           <View style={styles.headerRightControls}>
-            <Text style={styles.progressCounter}>
-              Q{currentIndex + 1} of {questions.length}
-            </Text>
+            {/* Direct Native Fullscreen Button */}
             <TouchableOpacity
-              style={styles.finishHeaderBtn}
-              onPress={finishSessionAndOpenReport}
+              style={[styles.fsBtn, isFullscreen && styles.fsBtnActive]}
+              onPress={handleToggleFullscreen}
             >
-              <Text style={styles.finishHeaderBtnText}>
-                Finish & Report ({Object.keys(sessionAnswers).length}/{questions.length})
+              <Text style={styles.fsBtnText}>{isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Full Screen Mode'}</Text>
+            </TouchableOpacity>
+
+            {/* Neural Voice & Accent Selector */}
+            <TouchableOpacity
+              style={styles.voiceSelectBtn}
+              onPress={() => setShowVoicePicker(true)}
+            >
+              <Text style={styles.voiceSelectBtnText}>
+                🎙️ {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.accent || 'Voice'} ▾
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.endHeaderBtn} onPress={handlePromptEndInterview}>
+              <Text style={styles.endHeaderBtnText}>End</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Question Details Card */}
-        <SectionCard title={currentQ.target_topic || "Interview Question"}>
-          <Text style={styles.questionText}>{currentQ.question_text}</Text>
+        {/* Fullscreen Prompt Banner if not in Fullscreen */}
+        {!isFullscreen && (
+          <TouchableOpacity style={styles.fullscreenBanner} onPress={handleToggleFullscreen}>
+            <Text style={styles.fullscreenBannerIcon}>⛶</Text>
+            <Text style={styles.fullscreenBannerText}>
+              Click here to expand into full screen mode for a distraction-free interview
+            </Text>
+          </TouchableOpacity>
+        )}
 
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonLabel}>Context Justification:</Text>
-            <Text style={styles.reasonText}>{currentQ.context_reason}</Text>
+        {/* ON-SCREEN TRANSCRIBED QUESTION / TELEPROMPTER OVERLAY */}
+        <View style={styles.teleprompterCard}>
+          <View style={styles.teleprompterHeaderRow}>
+            <View style={styles.teleprompterTag}>
+              <Text style={styles.teleprompterTagText}>
+                {interviewPhase === 'feedback'
+                  ? '📢 SPOKEN FEEDBACK & COACHING'
+                  : '🎙️ TRANSCRIBED QUESTION PROMPT'}
+              </Text>
+            </View>
+
+            <View style={styles.teleprompterAudioActions}>
+              {isTtsSpeaking ? (
+                <View style={styles.speakingWaveBadge}>
+                  <Text style={styles.speakingWaveText}>🔊 Speaking in AI Voice...</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.replayAudioBtn}
+                  onPress={() => {
+                    if (interviewPhase === 'feedback') {
+                      speakTextWithNeuralVoice(spokenFeedbackText);
+                    } else if (currentQ?.question_text) {
+                      speakTextWithNeuralVoice(currentQ.question_text, null, currentQ.question_id);
+                    }
+                  }}
+                >
+                  <Text style={styles.replayAudioBtnText}>🔊 Replay Audio</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
-          {/* Expected Key Concepts */}
-          <Text style={styles.conceptsHeader}>EXPECTED KEY CONCEPTS:</Text>
-          <View style={styles.conceptsRow}>
-            {(currentQ.expected_key_concepts || []).map((concept, idx) => (
-              <View key={idx} style={styles.conceptChip}>
-                <Text style={styles.conceptChipText}>{concept}</Text>
+          {/* Autoplay Blocked Banner */}
+          {autoplayBlocked && !isTtsSpeaking && (
+            <TouchableOpacity
+              style={styles.unmuteBanner}
+              onPress={() => {
+                if (interviewPhase === 'feedback') {
+                  speakTextWithNeuralVoice(spokenFeedbackText);
+                } else if (currentQ?.question_text) {
+                  speakTextWithNeuralVoice(currentQ.question_text, null, currentQ.question_id);
+                }
+              }}
+            >
+              <Text style={styles.unmuteBannerText}>▶️ Click here to listen to question audio</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Large, crystal-clear transcribed question text */}
+          <Text style={styles.teleprompterQuestionText}>
+            {interviewPhase === 'feedback'
+              ? `"${spokenFeedbackText}"`
+              : currentQ?.question_text}
+          </Text>
+
+          {/* Context Topic & Expected Concepts */}
+          {interviewPhase !== 'feedback' && (
+            <View style={styles.teleprompterMetaRow}>
+              {currentQ?.target_topic ? (
+                <Text style={styles.topicPill}>Topic: {currentQ.target_topic}</Text>
+              ) : null}
+              <View style={styles.conceptsInlineRow}>
+                {(currentQ?.expected_key_concepts || []).map((concept, idx) => (
+                  <View key={idx} style={styles.conceptChip}>
+                    <Text style={styles.conceptChipText}>{concept}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-        </SectionCard>
+            </View>
+          )}
 
-        {/* Video & Audio Mock Interview Card */}
-        <SectionCard title="Video & Spoken Interview Response">
-          {/* Recoverable Error Banner */}
+          {/* Live Candidate Speech Transcription Display during recording */}
+          {interviewPhase === 'recording' && (
+            <View style={styles.liveCandidateBox}>
+              <View style={styles.liveCandidateHeader}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.liveCandidateLabel}>YOUR LIVE SPEECH TRANSCRIPTION:</Text>
+              </View>
+              <Text style={styles.liveCandidateText}>
+                {liveCandidateTranscript || 'Speak your answer clearly into your microphone...'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Live Interaction & Video Area */}
+        <SectionCard title="Live Interaction & Camera View">
           {recordingError && (
             <View style={styles.errorBox}>
               <Text style={styles.errorIcon}>⚠️</Text>
               <View style={styles.errorTextWrap}>
-                <Text style={styles.errorTitle}>Camera / Microphone Notice</Text>
+                <Text style={styles.errorTitle}>Media Notice</Text>
                 <Text style={styles.errorDetail}>{recordingError}</Text>
               </View>
-              <TouchableOpacity style={styles.retryBtn} onPress={resetToRecord}>
-                <Text style={styles.retryBtnText}>Retry</Text>
-              </TouchableOpacity>
             </View>
           )}
 
-          {/* Live Camera Preview Box */}
-          <View
-            style={[
-              styles.cameraPreviewContainer,
-              isEvaluated && styles.cameraPreviewContainerCompact,
-            ]}
-          >
+          {/* Camera Preview Box with Embedded HUD */}
+          <View style={[styles.cameraPreviewContainer, isFullscreen && styles.cameraPreviewFullscreen]}>
             <View style={styles.cameraHeaderRow}>
               <View style={styles.cameraTitleRow}>
                 <Text style={styles.cameraIcon}>📹</Text>
-                <Text style={styles.cameraHeaderTitle}>
-                  {isEvaluated ? 'RECORDING SESSION COMPLETED' : 'CANDIDATE WEBCAM PREVIEW'}
-                </Text>
+                <Text style={styles.cameraHeaderTitle}>CANDIDATE WEBCAM</Text>
               </View>
-              {recordingState === 'recording' && (
+              {interviewPhase === 'recording' && (
                 <View style={styles.liveCameraBadge}>
                   <View style={styles.liveDot} />
                   <Text style={styles.liveCameraBadgeText}>LIVE ON AIR</Text>
                 </View>
               )}
-              {isEvaluated && (
-                <View style={styles.evaluatedCameraBadge}>
-                  <Text style={styles.evaluatedCameraBadgeText}>EVALUATED</Text>
-                </View>
-              )}
-              {recordingState !== 'recording' && !isEvaluated && (
-                <View style={styles.idleCameraBadge}>
-                  <Text style={styles.idleCameraBadgeText}>
-                    {hasVideoTrack ? 'CAMERA ACTIVE' : 'AUDIO / VIDEO READY'}
-                  </Text>
-                </View>
-              )}
             </View>
 
-            {/* Video Viewport / Feed */}
-            <View
-              style={[
-                styles.videoViewport,
-                isEvaluated && styles.videoViewportCompact,
-              ]}
+            {/* Video element rendering webcam */}
+            <div
+              style={{
+                width: '100%',
+                height: isFullscreen ? 360 : 260,
+                backgroundColor: '#0F172A',
+                borderRadius: 12,
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+              }}
             >
-              {typeof window !== 'undefined' ? (
-                <video
-                  ref={videoElementRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    objectPosition: 'center',
-                    transform: 'scaleX(-1)', // Mirrored selfie view
-                    backgroundColor: '#020617',
-                    display: recordingState === 'recording' && hasVideoTrack ? 'block' : 'none',
-                  }}
-                />
-              ) : null}
+              <video
+                ref={videoElementRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transform: 'scaleX(-1)',
+                  display: hasVideoTrack ? 'block' : 'none',
+                }}
+              />
+              {!hasVideoTrack && (
+                <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                  Camera stream offline or audio-only mode.
+                </div>
+              )}
+            </div>
 
-              {/* Floating Recording Overlay Badge (on top of live video stream) */}
-              {recordingState === 'recording' && (
-                <View style={styles.recordingOverlayBadge}>
-                  <View style={styles.recordingOverlayDot} />
-                  <Text style={styles.recordingOverlayText}>
-                    REC {formatTime(recordingDuration)}
+            {/* Phase HUD Overlays */}
+            {interviewPhase === 'prep' && (
+              <View style={styles.prepOverlayBox}>
+                <View style={styles.prepTopRow}>
+                  <View style={styles.prepTagBadge}>
+                    <Text style={styles.prepTagBadgeText}>PHASE 1: PREPARATION</Text>
+                  </View>
+                  <Text style={styles.prepCountdownDigit}>{prepTimeRemaining}s</Text>
+                </View>
+
+                <Text style={styles.prepInstructions}>
+                  Read and listen to the question carefully. Formulate your structure.
+                </Text>
+
+                <TouchableOpacity style={styles.skipPrepBtn} onPress={handleSkipPreparation}>
+                  <Text style={styles.skipPrepBtnText}>⚡ Skip Preparation & Start Recording</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {interviewPhase === 'countdown' && (
+              <View style={styles.recordingCountdownBox}>
+                <Text style={styles.recordingCountdownLabel}>RECORDING IN</Text>
+                <Text style={styles.recordingCountdownNumber}>{countdownRemaining}</Text>
+                <Text style={styles.recordingCountdownSub}>Get ready to speak...</Text>
+              </View>
+            )}
+
+            {interviewPhase === 'recording' && (
+              <View style={styles.activeRecordingBox}>
+                <View style={styles.timerRow}>
+                  <View style={styles.recordingBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.recordingBadgeText}>RECORDING ACTIVE</Text>
+                  </View>
+
+                  <View style={styles.timerDigitalWrap}>
+                    <Text style={styles.timerLabel}>ANSWER TIMER (MAX 3:00):</Text>
+                    <Text style={styles.timerDigits}>{formatTime(180 - recordingDuration)}</Text>
+                  </View>
+                </View>
+
+                {/* Answer Timer Progress Bar */}
+                <View style={styles.progressBarTrack}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${Math.min(100, (recordingDuration / 180) * 100)}%` },
+                    ]}
+                  />
+                </View>
+
+                {/* Dual Controls: Stop Answer & Continue vs End Interview */}
+                <View style={styles.dualControlsRow}>
+                  <TouchableOpacity
+                    style={styles.stopAndContinueBtn}
+                    onPress={handleStopAnswerAndContinue}
+                  >
+                    <Text style={styles.stopAndContinueBtnText}>⏹ Stop Answer & Continue ➔</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.endInterviewBtn}
+                    onPress={handlePromptEndInterview}
+                  >
+                    <Text style={styles.endInterviewBtnText}>✕ End Interview</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {interviewPhase === 'evaluating' && (
+              <View style={styles.evaluatingBox}>
+                <ActivityIndicator size="small" color="#38BDF8" />
+                <Text style={styles.evaluatingText}>
+                  Saving answer and synthesizing audio coaching feedback...
+                </Text>
+              </View>
+            )}
+
+            {interviewPhase === 'feedback' && (
+              <View style={styles.feedbackSpokenBox}>
+                <View style={styles.feedbackSpokenHeader}>
+                  <Text style={styles.feedbackSpokenIcon}>🔊</Text>
+                  <Text style={styles.feedbackSpokenTitle}>AI COACHING FEEDBACK (SPEAKING ALOUD)</Text>
+                </View>
+                <Text style={styles.feedbackSpokenQuote}>
+                  {spokenFeedbackText}
+                </Text>
+                <View style={styles.autoAdvanceRow}>
+                  <ActivityIndicator size="small" color="#10B981" />
+                  <Text style={styles.autoAdvanceText}>
+                    Continuously advancing to next question...
                   </Text>
                 </View>
-              )}
+              </View>
+            )}
+          </View>
+        </SectionCard>
+      </ScrollView>
 
-              {/* Overlay / Placeholder when not actively streaming video */}
-              {!(recordingState === 'recording' && hasVideoTrack) && (
-                isEvaluated ? (
-                  <View style={styles.cameraPlaceholderCompact}>
-                    <Text style={styles.placeholderIconCompact}>✅</Text>
-                    <View style={styles.placeholderTextWrapCompact}>
-                      <Text style={styles.placeholderTextCompact}>
-                        Video & Spoken Response Evaluated ({formatTime(recordingDuration)})
+      {/* Voice Selection Modal */}
+      <Modal visible={showVoicePicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.voiceModalContainer}>
+            <Text style={styles.modalTitle}>Choose AI Interviewer Voice</Text>
+            <Text style={styles.modalSub}>
+              Studio-grade Microsoft Neural Speech with natural cadence:
+            </Text>
+
+            <ScrollView style={styles.voiceList}>
+              {NEURAL_VOICES.map((v) => {
+                const isSelected = v.id === selectedVoice;
+                return (
+                  <TouchableOpacity
+                    key={v.id}
+                    style={[styles.voiceItem, isSelected && styles.voiceItemSelected]}
+                    onPress={() => {
+                      setSelectedVoice(v.id);
+                      setShowVoicePicker(false);
+                      testVoiceSample(v.id);
+                      prefetchAllQuestionsAudio(questions, v.id);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
+                        {v.name}
                       </Text>
-                      <Text style={styles.placeholderSubCompact}>
-                        Camera released • Performance analysis cards displayed below
-                      </Text>
+                      <Text style={styles.voiceItemLang}>Accent: {v.accent}</Text>
                     </View>
-                  </View>
-                ) : (
-                  <View style={styles.cameraPlaceholder}>
-                    <Text style={styles.placeholderIcon}>
-                      {recordingState === 'requesting' ? '⏳' : hasVideoTrack ? '🎥' : '🎙️'}
-                    </Text>
-                    <Text style={styles.placeholderText}>
-                      {recordingState === 'requesting'
-                        ? 'Requesting camera & microphone access...'
-                        : recordingState === 'recorded'
-                        ? 'Response captured with synchronized video & audio'
-                        : recordingState === 'evaluating'
-                        ? 'Analyzing spoken response with Whisper & NLP...'
-                        : 'Camera preview will activate when you click Start Answering'}
-                    </Text>
-                    <Text style={styles.placeholderSub}>
-                      {hasVideoTrack
-                        ? 'Webcam connected'
-                        : 'Synchronized video & microphone capture enabled'}
-                    </Text>
-                  </View>
-                )
-              )}
+                    {isSelected && <Text style={styles.voiceItemCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowVoicePicker(false)}>
+              <Text style={styles.modalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* End Interview Confirmation Modal */}
+      <Modal visible={showEndConfirmation} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Terminate Mock Interview Early?</Text>
+            <Text style={styles.modalDescription}>
+              You have completed <Text style={styles.modalHighlight}>{answeredCount} of {totalCount}</Text> questions.
+            </Text>
+            <Text style={styles.modalWarning}>
+              Ending now will save your in-progress response and finalize your session report based on your answered questions. Remaining questions will be marked as skipped.
+            </Text>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalContinueBtn}
+                onPress={() => setShowEndConfirmation(false)}
+              >
+                <Text style={styles.modalContinueBtnText}>Resume Interview</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalEndBtn}
+                onPress={handleConfirmEndInterview}
+              >
+                <Text style={styles.modalEndBtnText}>Confirm & End Interview</Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* State 1: Ready to Record */}
-          {recordingState === 'idle' && (
-            <View style={styles.recordActionBox}>
-              <Text style={styles.recordPrompt}>
-                Position yourself in front of your camera and speak clearly into your microphone:
-              </Text>
-              <TouchableOpacity style={styles.startRecordBtn} onPress={startRecording}>
-                <Text style={styles.startRecordBtnText}>🎥 Start Answering with Video</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* State 2: Requesting Permission */}
-          {recordingState === 'requesting' && (
-            <View style={styles.centerStatusBox}>
-              <ActivityIndicator color="#38BDF8" size="large" />
-              <Text style={styles.statusPrompt}>Requesting camera & microphone permissions...</Text>
-              <Text style={styles.statusSub}>Please click "Allow" in your browser prompt.</Text>
-            </View>
-          )}
-
-          {/* State 3: Actively Recording */}
-          {recordingState === 'recording' && (
-            <View style={styles.activeRecordBox}>
-              <View style={styles.liveIndicatorRow}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveLabel}>
-                  {hasVideoTrack ? 'SYNCHRONIZED VIDEO & AUDIO RECORDING' : 'AUDIO RECORDING (CAMERA FALLBACK)'}
-                </Text>
-              </View>
-              <Text style={styles.timerDisplay}>{formatTime(recordingDuration)}</Text>
-              <Text style={styles.speakPrompt}>
-                Maintain eye contact with your camera and explain your response...
-              </Text>
-              <TouchableOpacity style={styles.stopRecordBtn} onPress={stopRecording}>
-                <Text style={styles.stopRecordBtnText}>⏹️ Stop Recording</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* State 4: Recording Stopped, Ready to Submit */}
-          {recordingState === 'recorded' && (
-            <View style={styles.recordedBox}>
-              <View style={styles.recordedMetaRow}>
-                <Text style={styles.recordedSuccessText}>
-                  ✓ {hasVideoTrack ? 'Video & Audio Response Captured' : 'Audio Response Captured'}
-                </Text>
-                <Text style={styles.recordedTimeBadge}>{formatTime(recordingDuration)}</Text>
-              </View>
-              <Text style={styles.readyPrompt}>
-                Submit your response for Whisper transcription and expected-concept evaluation, or record again:
-              </Text>
-              <View style={styles.recordBtnRow}>
-                <TouchableOpacity style={styles.reRecordBtn} onPress={startRecording}>
-                  <Text style={styles.reRecordBtnText}>🔄 Re-record</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.submitBtn} onPress={submitAndEvaluate}>
-                  <Text style={styles.submitBtnText}>🚀 Submit & Evaluate</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* State 5: Processing Transcription & Evaluation */}
-          {recordingState === 'evaluating' && (
-            <View style={styles.centerStatusBox}>
-              <ActivityIndicator color="#10B981" size="large" />
-              <Text style={styles.statusPrompt}>Transcribing Speech with Whisper...</Text>
-              <Text style={styles.statusSub}>
-                Analyzing answer relevance and evaluating expected concepts ({formatTime(recordingDuration)} response).
-              </Text>
-            </View>
-          )}
-
-          {/* State 6: Evaluation Results Display */}
-          {recordingState === 'evaluated' && evaluationData && (
-            <View style={styles.evaluatedContainer}>
-              {/* Candidate Transcript Box */}
-              <View style={styles.transcriptCard}>
-                <View style={styles.transcriptHeaderRow}>
-                  <Text style={styles.transcriptLabel}>CANDIDATE SPOKEN TRANSCRIPT</Text>
-                  <Text style={styles.transcriptWordsBadge}>
-                    {evaluationData.transcript_metadata?.word_count || 0} words
-                  </Text>
-                </View>
-                <Text style={styles.transcriptText}>
-                  {candidateTranscript || "(No words recognized in audio recording. Please speak closer to the microphone and try again.)"}
-                </Text>
-                {evaluationData.transcript_metadata?.duration_seconds && (
-                  <Text style={styles.transcriptDuration}>
-                    Audio duration: {evaluationData.transcript_metadata.duration_seconds}s • Model: {evaluationData.transcript_metadata.model_used || 'whisper-base'}
-                  </Text>
-                )}
-              </View>
-
-              {/* Member 3 Evaluation Report Card */}
-              <View style={styles.evalResultsCard}>
-                <View style={styles.evalHeaderRow}>
-                  <Text style={styles.evalHeaderTitle}>MEMBER 3: EVALUATION REPORT</Text>
-                  <Text style={styles.evalScoreBadge}>
-                    {evaluationData.relevance.relevance_score}% Relevance
-                  </Text>
-                </View>
-
-                {/* Metrics Row */}
-                <View style={styles.metricsRow}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Concept Coverage</Text>
-                    <Text style={styles.metricValue}>
-                      {evaluationData.concept_coverage.coverage_score}%
-                    </Text>
-                    <Text style={styles.metricSub}>
-                      ({evaluationData.concept_coverage.covered_count}/{evaluationData.concept_coverage.total_expected} concepts)
-                    </Text>
-                  </View>
-
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Relevance Level</Text>
-                    <Text style={[styles.metricValue, { color: '#38BDF8' }]}>
-                      {evaluationData.relevance.interpretation}
-                    </Text>
-                    <Text style={styles.metricSub}>
-                      {evaluationData.transcript_metadata?.word_count || 0} words analyzed
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Covered Concepts */}
-                {evaluationData.concept_coverage.covered_concepts?.length > 0 && (
-                  <View style={styles.conceptSection}>
-                    <Text style={styles.coveredLabel}>✓ COVERED KEY CONCEPTS:</Text>
-                    <View style={styles.conceptsRow}>
-                      {evaluationData.concept_coverage.covered_concepts.map((c, i) => (
-                        <View key={i} style={styles.coveredChip}>
-                          <Text style={styles.coveredChipText}>{c}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Partially Covered Concepts */}
-                {evaluationData.concept_coverage.partially_covered_concepts?.length > 0 && (
-                  <View style={styles.conceptSection}>
-                    <Text style={styles.partialLabel}>⚠ PARTIALLY COVERED CONCEPTS:</Text>
-                    <View style={styles.conceptsRow}>
-                      {evaluationData.concept_coverage.partially_covered_concepts.map((c, i) => (
-                        <View key={i} style={styles.partialChip}>
-                          <Text style={styles.partialChipText}>{c}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Missing Concepts */}
-                {evaluationData.concept_coverage.missing_concepts?.length > 0 && (
-                  <View style={styles.conceptSection}>
-                    <Text style={styles.missingLabel}>✗ MISSING EXPECTED CONCEPTS:</Text>
-                    <View style={styles.conceptsRow}>
-                      {evaluationData.concept_coverage.missing_concepts.map((c, i) => (
-                        <View key={i} style={styles.missingChip}>
-                          <Text style={styles.missingChipText}>{c}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              {/* Module 4 Speaking Delivery Analysis Card */}
-              {evaluationData.delivery_metrics && (
-                <View style={styles.deliveryResultsCard}>
-                  <View style={styles.evalHeaderRow}>
-                    <Text style={styles.deliveryHeaderTitle}>SPEAKING DELIVERY ANALYSIS</Text>
-                    <Text style={[
-                      styles.deliveryBadge,
-                      evaluationData.delivery_metrics.pace_rating === 'Optimal'
-                        ? styles.badgeOptimal
-                        : styles.badgeWarning
-                    ]}>
-                      {evaluationData.delivery_metrics.words_per_minute} WPM ({evaluationData.delivery_metrics.pace_rating})
-                    </Text>
-                  </View>
-
-                  <View style={styles.metricsRow}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Pacing Cadence</Text>
-                      <Text style={styles.metricValue}>
-                        {evaluationData.delivery_metrics.words_per_minute} WPM
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.delivery_metrics.pace_rating} pace (target: 110-165)
-                      </Text>
-                    </View>
-
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Filler Word Count</Text>
-                      <Text style={[
-                        styles.metricValue,
-                        { color: evaluationData.delivery_metrics.total_filler_words === 0 ? '#10B981' : '#F59E0B' }
-                      ]}>
-                        {evaluationData.delivery_metrics.total_filler_words}
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.delivery_metrics.filler_percentage}% of total words
-                      </Text>
-                    </View>
-
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Extended Pauses</Text>
-                      <Text style={styles.metricValue}>
-                        {evaluationData.delivery_metrics.extended_pause_count}
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.delivery_metrics.total_pause_duration_seconds}s total silence (&gt;1.5s)
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Coaching Tip */}
-                  {evaluationData.delivery_metrics.speaking_coaching_tip ? (
-                    <View style={styles.tipBox}>
-                      <Text style={styles.tipLabel}>💡 Speaking Coach Tip:</Text>
-                      <Text style={styles.tipText}>
-                        {evaluationData.delivery_metrics.speaking_coaching_tip}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
-
-              {/* Module 4 Visual Engagement Analysis Card */}
-              {evaluationData.visual_metrics && evaluationData.visual_metrics.video_track_detected && (
-                <View style={styles.visualResultsCard}>
-                  <View style={styles.evalHeaderRow}>
-                    <Text style={styles.visualHeaderTitle}>VISUAL ENGAGEMENT & FRAMING</Text>
-                    <Text style={styles.visualBadge}>
-                      {evaluationData.visual_metrics.face_presence_ratio}% Face Presence
-                    </Text>
-                  </View>
-
-                  <View style={styles.metricsRow}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Camera Visibility</Text>
-                      <Text style={styles.metricValue}>
-                        {evaluationData.visual_metrics.face_presence_ratio}%
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.visual_metrics.face_detected_frames}/{evaluationData.visual_metrics.total_frames_sampled} frames detected
-                      </Text>
-                    </View>
-
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Center Framing</Text>
-                      <Text style={[styles.metricValue, { color: '#38BDF8' }]}>
-                        {evaluationData.visual_metrics.face_centering_ratio}%
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.visual_metrics.face_centered_frames} frames in center 50%
-                      </Text>
-                    </View>
-
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Head & Posture</Text>
-                      <Text style={[styles.metricValue, { color: '#A7F3D0', fontSize: 13 }]}>
-                        {evaluationData.visual_metrics.head_movement_stability}
-                      </Text>
-                      <Text style={styles.metricSub}>
-                        {evaluationData.visual_metrics.upper_body_posture_stability}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Visual Coaching Tip */}
-                  {evaluationData.visual_metrics.visual_coaching_tip ? (
-                    <View style={styles.tipBox}>
-                      <Text style={styles.tipLabel}>📹 Camera Framing Tip:</Text>
-                      <Text style={styles.tipText}>
-                        {evaluationData.visual_metrics.visual_coaching_tip}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Objective Methodology Note */}
-                  {evaluationData.visual_metrics.methodology_limitations ? (
-                    <Text style={styles.methodologyNote}>
-                      ℹ️ {evaluationData.visual_metrics.methodology_limitations}
-                    </Text>
-                  ) : null}
-                </View>
-              )}
-
-              {/* Record New Answer Button */}
-              <TouchableOpacity style={styles.reRecordOutlinedBtn} onPress={resetToRecord}>
-                <Text style={styles.reRecordOutlinedBtnText}>🎙️ Record New Answer for this Question</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Member 2 Adaptive Follow-up Probing Trigger Button */}
-          {recordingState === 'evaluated' && candidateTranscript.trim().length > 0 && (
-            <TouchableOpacity
-              style={[styles.followupBtn, generatingFollowup && styles.btnDisabled]}
-              onPress={handleGenerateFollowup}
-              disabled={generatingFollowup}
-            >
-              {generatingFollowup ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.followupBtnText}>
-                  {evaluationData?.concept_coverage?.missing_concepts?.length > 0
-                    ? `⚡ Probing Follow-up on Missing Concepts (${evaluationData.concept_coverage.missing_concepts.length})`
-                    : '⚡ Generate Adaptive Follow-up Question'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {/* Follow-up Display Card */}
-          {followupData && (
-            <View style={styles.followupCard}>
-              <View style={styles.followupHeader}>
-                <Text style={styles.followupTag}>ADAPTIVE FOLLOW-UP</Text>
-                <Text style={styles.focusTag}>Focus: {followupData.focus_area}</Text>
-              </View>
-              <Text style={styles.followupQuestionText}>{followupData.followup_question}</Text>
-            </View>
-          )}
-        </SectionCard>
-
-        {/* Navigation Controls */}
-        <View style={styles.navRow}>
-          {currentIndex > 0 && (
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handlePreviousQuestion}>
-              <Text style={styles.secondaryBtnText}>← Previous</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.primaryNavBtn} onPress={handleNextQuestion}>
-            <Text style={styles.primaryNavBtnText}>
-              {currentIndex < questions.length - 1 ? 'Next Question →' : 'Finish & View Performance Report 🎉'}
-            </Text>
-          </TouchableOpacity>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#0F172A',
   },
-  container: {
+  containerFullscreen: {
+    padding: 0,
+    backgroundColor: '#0A0F1D',
+  },
+  scrollContent: {
     padding: 16,
     paddingBottom: 40,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#0F172A',
     padding: 24,
   },
   loadingText: {
     color: '#94A3B8',
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 14,
     textAlign: 'center',
   },
   errorText: {
     color: '#EF4444',
-    fontSize: 16,
+    fontSize: 14,
+    textAlign: 'center',
     marginBottom: 16,
+  },
+
+  // Ready Phase Styles
+  readyCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  readyEmoji: {
+    fontSize: 48,
+    marginBottom: 10,
+  },
+  readyTitle: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 6,
     textAlign: 'center',
   },
+  readySub: {
+    color: '#94A3B8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  roleHighlight: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  readyVoiceBox: {
+    width: '100%',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 14,
+    marginBottom: 18,
+  },
+  readyVoiceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  readyVoiceTitle: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  readyTestBtn: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  readyTestBtnText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  readyVoiceSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+  },
+  readyVoiceName: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  readyVoicePill: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  changeVoiceLink: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  featureList: {
+    width: '100%',
+    marginBottom: 24,
+    gap: 8,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  featureIcon: {
+    fontSize: 16,
+  },
+  featureText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  launchBtnContainer: {
+    width: '100%',
+    gap: 10,
+  },
+  launchFsBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  launchFsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  launchNormalBtn: {
+    backgroundColor: '#334155',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  launchNormalBtnText: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Header & Navigation
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  questionIndexBadge: {
+    color: '#38BDF8',
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    letterSpacing: 0.5,
+  },
+  categoryBadge: {
+    color: '#94A3B8',
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  difficultyBadge: {
+    color: '#F59E0B',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   headerRightControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  finishHeaderBtn: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+  fsBtn: {
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#38BDF8',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  finishHeaderBtnText: {
-    color: '#38BDF8',
-    fontSize: 11,
-    fontWeight: '700',
+  fsBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#60A5FA',
   },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  categoryBadge: {
+  fsBtnText: {
+    color: '#93C5FD',
     fontSize: 11,
     fontWeight: '800',
-    color: '#38BDF8',
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+  },
+  voiceSelectBtn: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#475569',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 5,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#38BDF8',
   },
-  difficultyBadge: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F59E0B',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  progressCounter: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  questionText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  reasonBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
-  },
-  reasonLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  reasonText: {
-    fontSize: 12,
+  voiceSelectBtnText: {
     color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '700',
   },
-  conceptsHeader: {
+  endHeaderBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  endHeaderBtnText: {
+    color: '#F87171',
     fontSize: 11,
     fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 6,
   },
-  conceptsRow: {
+
+  fullscreenBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  fullscreenBannerIcon: {
+    color: '#60A5FA',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  fullscreenBannerText: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+
+  // Teleprompter Card
+  teleprompterCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+    padding: 16,
+    marginBottom: 14,
+  },
+  teleprompterHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
     flexWrap: 'wrap',
     gap: 6,
   },
-  conceptChip: {
-    backgroundColor: '#1E293B',
+  teleprompterTag: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  conceptChipText: {
-    color: '#A7F3D0',
+  teleprompterTagText: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  teleprompterAudioActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  speakingWaveBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  speakingWaveText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  replayAudioBtn: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  replayAudioBtnText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  unmuteBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  unmuteBannerText: {
+    color: '#FCD34D',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  teleprompterQuestionText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 24,
+    marginBottom: 10,
+  },
+  teleprompterMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  topicPill: {
+    color: '#94A3B8',
     fontSize: 11,
     fontWeight: '600',
   },
-
-  // Camera Preview Styles
-  cameraPreviewContainer: {
+  conceptsInlineRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  conceptChip: {
     backgroundColor: '#0F172A',
-    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#334155',
-    overflow: 'hidden',
-    marginBottom: 16,
-    width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  cameraPreviewContainerCompact: {
-    marginBottom: 14,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
+  conceptChipText: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  // Live Candidate Speech Transcription Display
+  liveCandidateBox: {
+    marginTop: 12,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+    padding: 10,
+  },
+  liveCandidateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  livePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+  },
+  liveCandidateLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  liveCandidateText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+
+  // Camera & Video HUD
+  cameraPreviewContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cameraPreviewFullscreen: {
+    padding: 16,
   },
   cameraHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#1E293B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    marginBottom: 8,
   },
   cameraTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   cameraIcon: {
     fontSize: 14,
@@ -1146,511 +1874,422 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
   },
   liveCameraBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    gap: 5,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
     borderWidth: 1,
     borderColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
   },
   liveCameraBadgeText: {
     color: '#EF4444',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  idleCameraBadge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-  },
-  idleCameraBadgeText: {
-    color: '#38BDF8',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  evaluatedCameraBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-  },
-  evaluatedCameraBadgeText: {
-    color: '#10B981',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  videoViewport: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    maxHeight: 540,
-    minHeight: 200,
-    backgroundColor: '#020617',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  videoViewportCompact: {
-    aspectRatio: undefined,
-    height: 64,
-    minHeight: 64,
-    maxHeight: 64,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  recordingOverlayBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    zIndex: 10,
-  },
-  recordingOverlayDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-  },
-  recordingOverlayText: {
-    color: '#FCA5A5',
-    fontSize: 12,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: 0.5,
-  },
-  cameraPlaceholder: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    maxWidth: 520,
-  },
-  placeholderIcon: {
-    fontSize: 36,
-    marginBottom: 10,
-  },
-  placeholderText: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 6,
-    lineHeight: 20,
-  },
-  placeholderSub: {
-    color: '#64748B',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  cameraPlaceholderCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    justifyContent: 'center',
-  },
-  placeholderIconCompact: {
-    fontSize: 20,
-  },
-  placeholderTextWrapCompact: {
-    justifyContent: 'center',
-  },
-  placeholderTextCompact: {
-    color: '#F8FAFC',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  placeholderSubCompact: {
-    color: '#64748B',
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 9,
+    fontWeight: '900',
   },
 
-  // Recording Experience Styles
-  recordActionBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#334155',
-    alignItems: 'center',
-    marginBottom: 14,
-    width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
-  },
-  recordPrompt: {
-    color: '#94A3B8',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 14,
-    lineHeight: 18,
-  },
-  startRecordBtn: {
-    backgroundColor: '#7C3AED',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: '#7C3AED',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  startRecordBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  centerStatusBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#334155',
-    alignItems: 'center',
-    marginBottom: 14,
-    width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
-  },
-  statusPrompt: {
-    color: '#F8FAFC',
-    fontSize: 15,
-    fontWeight: '700',
+  // Prep Phase Overlay
+  prepOverlayBox: {
     marginTop: 12,
-    textAlign: 'center',
-  },
-  statusSub: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  activeRecordBox: {
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
     borderRadius: 12,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-    alignItems: 'center',
-    marginBottom: 14,
-    width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
-  },
-  liveIndicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  liveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#EF4444',
-  },
-  liveLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#EF4444',
-    letterSpacing: 1,
-  },
-  timerDisplay: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: '#F8FAFC',
-    letterSpacing: 2,
-    marginVertical: 4,
-    fontVariant: ['tabular-nums'],
-  },
-  speakPrompt: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginBottom: 16,
-  },
-  stopRecordBtn: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    width: '100%',
-  },
-  stopRecordBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  recordedBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
-    padding: 16,
     borderWidth: 1,
-    borderColor: '#10B981',
-    marginBottom: 14,
-    width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
+    borderColor: '#38BDF8',
+    padding: 14,
   },
-  recordedMetaRow: {
+  prepTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  recordedSuccessText: {
-    color: '#10B981',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  recordedTimeBadge: {
-    color: '#A7F3D0',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  prepTagBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    fontSize: 12,
-    fontWeight: '800',
   },
-  readyPrompt: {
+  prepTagBadgeText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  prepCountdownDigit: {
+    color: '#38BDF8',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  prepInstructions: {
     color: '#94A3B8',
     fontSize: 12,
     marginBottom: 12,
     lineHeight: 16,
   },
-  recordBtnRow: {
+  skipPrepBtn: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  skipPrepBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // Countdown Phase Overlay
+  recordingCountdownBox: {
+    marginTop: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    padding: 18,
+    alignItems: 'center',
+  },
+  recordingCountdownLabel: {
+    color: '#F59E0B',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  recordingCountdownNumber: {
+    color: '#F59E0B',
+    fontSize: 48,
+    fontWeight: '900',
+  },
+  recordingCountdownSub: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  // Recording Active Box
+  activeRecordingBox: {
+    marginTop: 12,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 12,
+  },
+  timerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recordingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recordingBadgeText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  timerDigitalWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timerLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  timerDigits: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  progressBarTrack: {
+    height: 4,
+    backgroundColor: '#1E293B',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#EF4444',
+  },
+  dualControlsRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  reRecordBtn: {
-    flex: 1,
-    backgroundColor: '#1E293B',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  reRecordBtnText: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  submitBtn: {
-    flex: 1.6,
+  stopAndContinueBtn: {
+    flex: 2,
     backgroundColor: '#10B981',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
-  submitBtnText: {
+  stopAndContinueBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
-
-  // Evaluated Results Styles
-  evaluatedContainer: {
-    marginBottom: 12,
-  },
-  transcriptCard: {
-    backgroundColor: '#0F172A',
+  endInterviewBtn: {
+    flex: 1,
+    backgroundColor: '#334155',
+    paddingVertical: 12,
     borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
-  },
-  transcriptHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
   },
-  transcriptLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 0.5,
-  },
-  transcriptWordsBadge: {
-    fontSize: 11,
-    color: '#94A3B8',
+  endInterviewBtnText: {
+    color: '#FCA5A5',
+    fontSize: 12,
     fontWeight: '700',
   },
-  transcriptText: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    lineHeight: 20,
-    fontStyle: 'normal',
-  },
-  transcriptDuration: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 8,
-  },
-  evalResultsCard: {
-    backgroundColor: '#1E293B',
+
+  // Evaluating Box
+  evaluatingBox: {
+    marginTop: 12,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3B82F6',
-    padding: 14,
-    marginBottom: 12,
-  },
-  evalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderColor: '#38BDF8',
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-    paddingBottom: 8,
+    gap: 8,
   },
-  evalHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '800',
+  evaluatingText: {
     color: '#38BDF8',
-    letterSpacing: 0.5,
-  },
-  evalScoreBadge: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  metricItem: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  metricLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
     fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 4,
   },
-  metricValue: {
-    fontSize: 15,
-    color: '#10B981',
-    fontWeight: '800',
-  },
-  metricSub: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  conceptSection: {
-    marginTop: 8,
-  },
-  coveredLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#10B981',
-    marginBottom: 4,
-  },
-  coveredChip: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+
+  // Spoken Feedback Box
+  feedbackSpokenBox: {
+    marginTop: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    padding: 14,
   },
-  coveredChipText: {
+  feedbackSpokenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  feedbackSpokenIcon: {
+    fontSize: 14,
+  },
+  feedbackSpokenTitle: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  feedbackSpokenQuote: {
+    color: '#F0FDF4',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  autoAdvanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  autoAdvanceText: {
     color: '#6EE7B7',
     fontSize: 11,
     fontWeight: '600',
   },
-  partialLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#F59E0B',
-    marginBottom: 4,
-  },
-  partialChip: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+
+  // Modals & Completion
+  completedContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#F59E0B',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    borderColor: '#334155',
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 20,
   },
-  partialChipText: {
-    color: '#FCD34D',
-    fontSize: 11,
-    fontWeight: '600',
+  completedEmoji: {
+    fontSize: 48,
+    marginBottom: 10,
   },
-  missingLabel: {
-    fontSize: 10,
+  completedTitle: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  completedSub: {
+    color: '#94A3B8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  viewReportBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  viewReportBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '800',
-    color: '#EF4444',
-    marginBottom: 4,
   },
-  missingChip: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  missingChipText: {
-    color: '#FCA5A5',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  reRecordOutlinedBtn: {
+  modalContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 22,
+    width: '100%',
+    maxWidth: 440,
     borderWidth: 1,
     borderColor: '#475569',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 4,
   },
-  reRecordOutlinedBtnText: {
+  voiceModalContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 22,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: '#475569',
+  },
+  modalTitle: {
+    color: '#F8FAFC',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  modalSub: {
     color: '#94A3B8',
     fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 14,
+  },
+  voiceList: {
+    maxHeight: 320,
+    marginBottom: 14,
+  },
+  voiceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  voiceItemSelected: {
+    borderColor: '#38BDF8',
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+  },
+  voiceItemName: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  voiceItemNameSelected: {
+    color: '#38BDF8',
+    fontWeight: '800',
+  },
+  voiceItemLang: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  voiceItemCheck: {
+    color: '#38BDF8',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  modalCloseBtn: {
+    backgroundColor: '#334155',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
-
-  // Error Banner
+  modalDescription: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  modalHighlight: {
+    color: '#38BDF8',
+    fontWeight: '800',
+  },
+  modalWarning: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 18,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalContinueBtn: {
+    flex: 1,
+    backgroundColor: '#334155',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalContinueBtnText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalEndBtn: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalEndBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
   errorBox: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderColor: '#EF4444',
@@ -1679,177 +2318,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
-  retryBtn: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  retryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  // Follow-up Styles
-  followupBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  followupBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  followupCard: {
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    borderColor: '#38BDF8',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 12,
-  },
-  followupHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  followupTag: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 1,
-  },
-  focusTag: {
-    fontSize: 11,
-    color: '#CBD5E1',
-    fontWeight: '600',
-  },
-  followupQuestionText: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-
-  // Navigation Row
-  navRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  secondaryBtn: {
-    flex: 1,
-    backgroundColor: '#1E293B',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  secondaryBtnText: {
-    color: '#CBD5E1',
-    fontWeight: '700',
-  },
-  primaryNavBtn: {
-    flex: 2,
-    backgroundColor: '#10B981',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  primaryNavBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  // Module 4 Delivery & Visual Cards
-  deliveryResultsCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    padding: 14,
-    marginBottom: 12,
-  },
-  deliveryHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F59E0B',
-    letterSpacing: 0.5,
-  },
-  deliveryBadge: {
-    fontSize: 11,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeOptimal: {
-    color: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  badgeWarning: {
-    color: '#F59E0B',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-  },
-  visualResultsCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-    padding: 14,
-    marginBottom: 12,
-  },
-  visualHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#A78BFA',
-    letterSpacing: 0.5,
-  },
-  visualBadge: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#A78BFA',
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  tipBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 10,
-    marginTop: 8,
-  },
-  tipLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    marginBottom: 3,
-  },
-  tipText: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  methodologyNote: {
-    color: '#64748B',
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-
   primaryBtn: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#2563EB',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,

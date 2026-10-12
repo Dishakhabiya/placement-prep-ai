@@ -227,5 +227,18 @@ export const apiClient = {
     }
     return data;
   },
+
+  async getNeuralTtsAudio({ text, voice = 'en-IN-NeerjaNeural', rate = '-3%', pitch = '+0Hz' }) {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice, rate, pitch }),
+    }, 15000);
+    if (!res.ok) {
+      throw new Error(`TTS server error (${res.status})`);
+    }
+    const blob = await res.blob();
+    return blob;
+  },
 };
 
