@@ -7,11 +7,12 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useProfileStore } from '../store/profileStore';
 import SectionCard from '../components/SectionCard';
+import Caricatures from '../assets/caricatures';
 
 export default function HistoryScreen({ navigation }) {
   const {
@@ -19,7 +20,6 @@ export default function HistoryScreen({ navigation }) {
     loadHistory,
     fetchProfile,
     deleteProfile,
-    isLoading,
   } = useProfileStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -73,7 +73,11 @@ export default function HistoryScreen({ navigation }) {
 
         {profilesList.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📂</Text>
+            <Image
+              source={Caricatures.step1Resume || Caricatures.puzzleSkills}
+              style={styles.emptyImg}
+              resizeMode="contain"
+            />
             <Text style={styles.emptyTitle}>No saved profiles found</Text>
             <Text style={styles.emptySubtitle}>
               Uploaded resumes and analysis records will appear here.
@@ -93,7 +97,7 @@ export default function HistoryScreen({ navigation }) {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor="#38BDF8"
+                tintColor="#4F46E5"
               />
             }
             renderItem={({ item }) => (
@@ -102,12 +106,12 @@ export default function HistoryScreen({ navigation }) {
                   title={item.job_title || 'Software Engineer'}
                   subtitle={`ID: ${item.profile_id} • ${new Date(item.created_at).toLocaleDateString()}`}
                   badge={`${Math.round(item.match_score)}% Match`}
-                  badgeColor={item.match_score >= 70 ? '#10B981' : '#F59E0B'}
+                  badgeColor="#FFC82C"
                 >
                   <View style={styles.cardActionsRow}>
                     <View style={styles.metaCol}>
                       <Text style={styles.modeBadgeText}>
-                        Mode: {item.mode.toUpperCase()}
+                        Mode: {item.mode?.toUpperCase()}
                       </Text>
                       <Text style={styles.skillsCountText}>
                         {item.candidate_skills_count} candidate skills
@@ -144,11 +148,14 @@ export default function HistoryScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8F9FA',
   },
   container: {
     flex: 1,
-    padding: 16,
+    padding: 20,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   headerRow: {
     flexDirection: 'row',
@@ -157,9 +164,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: '#111827',
   },
   listContent: {
     paddingBottom: 24,
@@ -179,11 +186,11 @@ const styles = StyleSheet.create({
   modeBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#38BDF8',
+    color: '#4F46E5',
   },
   skillsCountText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#6B7280',
     marginTop: 2,
   },
   btnRow: {
@@ -203,10 +210,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   deleteBtn: {
-    backgroundColor: '#334155',
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   deleteBtnText: {
     fontSize: 14,
@@ -217,32 +226,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  emptyIcon: {
-    fontSize: 48,
+  emptyImg: {
+    width: 140,
+    height: 110,
     marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#E2E8F0',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
     marginBottom: 4,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 18,
   },
   newAnalysisBtn: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 20,
+    backgroundColor: '#111827',
+    paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 12,
   },
   newAnalysisBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: '#FFC82C',
+    fontWeight: '800',
     fontSize: 14,
   },
 });

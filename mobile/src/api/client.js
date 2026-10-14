@@ -33,7 +33,7 @@ export const apiClient = {
     }
   },
 
-  async createProfile({ file, jdText, mode }) {
+  async createProfile({ file, jdText, jdFile, mode }) {
     const formData = new FormData();
 
     if (file) {
@@ -55,7 +55,27 @@ export const apiClient = {
       }
     }
 
-    formData.append('jd_text', jdText || '');
+    if (jdFile) {
+      if (typeof window !== 'undefined' && jdFile instanceof Blob) {
+        formData.append('jd_file', jdFile, jdFile.name || 'job_description.pdf');
+      } else if (jdFile.uri) {
+        try {
+          const jdRes = await fetch(jdFile.uri);
+          const jdBlob = await jdRes.blob();
+          formData.append('jd_file', jdBlob, jdFile.name || 'job_description.pdf');
+        } catch {
+          formData.append('jd_file', {
+            uri: jdFile.uri,
+            name: jdFile.name || 'job_description.pdf',
+            type: jdFile.mimeType || (jdFile.name?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'),
+          });
+        }
+      }
+    }
+
+    if (jdText) {
+      formData.append('jd_text', jdText);
+    }
     formData.append('mode', mode || 'mixed');
 
     // Do NOT set Content-Type header manually for multipart FormData
@@ -239,6 +259,33 @@ export const apiClient = {
     }
     const blob = await res.blob();
     return blob;
+  },
+
+  async evaluateSpeechAnswer(paramsOrFormData) {
+    if (typeof FormData !== 'undefined' && paramsOrFormData instanceof FormData) {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/transcribe`, {
+        method: 'POST',
+        body: paramsOrFormData,
+      }, 45000);
+      const data = await res.json();
+      if (!res.ok) {
+        const errorMsg = data.detail || `Server error (${res.status})`;
+        throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      }
+      return data;
+    }
+    return this.transcribeAudioAnswer(paramsOrFormData);
+  },
+
+  async evaluateTextAnswer(params) {
+    return this.evaluateAnswerText({
+      profileId: params.profileId || params.profile_id,
+      sessionId: params.sessionId || params.session_id,
+      questionId: params.questionId || params.question_id,
+      questionText: params.questionText || params.question_text,
+      expectedKeyConcepts: params.expectedKeyConcepts || params.expected_key_concepts || [],
+      answerText: params.answerText || params.answer_text,
+    });
   },
 };
 

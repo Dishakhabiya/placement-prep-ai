@@ -7,13 +7,23 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import SectionCard from '../components/SectionCard';
+import Caricatures from '../assets/caricatures';
+
 
 export default function PerformanceReportScreen({ route, navigation }) {
-  const { sessionAnswers = [], questions = [], profile = null, sessionId = null } =
-    route?.params || {};
+  // Normalize: sessionAnswers may be an array or an object map
+  const rawParams = route?.params || {};
+  const rawSessionAnswers = rawParams.sessionAnswers || rawParams.session_answers || [];
+  const sessionAnswersArray = Array.isArray(rawSessionAnswers)
+    ? rawSessionAnswers
+    : Object.values(rawSessionAnswers);
+  const questions = rawParams.questions || [];
+  const profile = rawParams.profile || null;
+  const sessionId = rawParams.sessionId || rawParams.session_id || null;
 
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
@@ -29,30 +39,53 @@ export default function PerformanceReportScreen({ route, navigation }) {
       setLoading(true);
       setError(null);
 
-      // Extract evaluations list from session answers
-      const evaluationsList = sessionAnswers
-        .map((a) => {
-          if (!a) return null;
-          const ev = a.evaluation || a;
+      // All answered questions (status = 'saved', whether evaluated or not)
+      const answeredAnswers = sessionAnswersArray.filter((a) => a && (a.status === 'saved' || a.evaluated));
+
+      // Extract evaluations — include answers where evaluation ran OR create a stub from transcript
+      const evaluationsList = answeredAnswers.map((a) => {
+        if (!a) return null;
+        const q = a.question || questions.find((q) => q.question_id === a.question_id);
+        if (a.evaluation) {
           return {
-            ...ev,
-            question_id: a.question?.question_id || ev.question_id || a.question_id,
-            target_topic: a.question?.target_topic || ev.target_topic,
-            question_text: a.question?.question_text || ev.question_text,
-            followup: a.followup || null,
+            ...a.evaluation,
+            question_id: a.question_id || a.evaluation?.question_id,
+            target_topic: q?.target_topic || a.evaluation?.target_topic,
+            question_text: q?.question_text || a.question_text || a.evaluation?.question_text,
           };
-        })
-        .filter(Boolean);
+        }
+        // Stub evaluation from local transcript data so answered count is correct
+        return {
+          question_id: a.question_id,
+          question_text: a.question_text || q?.question_text || '',
+          target_topic: q?.target_topic || '',
+          relevance: { relevance_score: null },
+          concept_coverage: {
+            coverage_score: null,
+            covered_concepts: [],
+            missing_concepts: q?.expected_key_concepts || [],
+          },
+          transcript_metadata: {
+            transcript: a.transcript || '',
+            word_count: a.transcript ? a.transcript.split(' ').filter(Boolean).length : 0,
+            duration_seconds: a.duration || 0,
+          },
+          delivery_metrics: null,
+          status: a.evaluated ? 'evaluated' : 'saved_no_eval',
+          error: a.error || null,
+        };
+      }).filter(Boolean);
 
       const candidateName = profile?.candidate?.name || 'Candidate';
       const targetRole = profile?.job?.title || 'Software Engineer';
-      const totalQ = questions?.length || Math.max(evaluationsList.length, 1);
+      const totalQ = questions?.length || Math.max(answeredAnswers.length, 1);
 
       // Call backend aggregation endpoint
       try {
         const remoteReport = await apiClient.generateSessionReport({
           evaluations: evaluationsList,
           totalQuestions: totalQ,
+          answeredQuestions: answeredAnswers.length,
           questions: questions,
           profileId: profile?.profile_id,
           sessionId: sessionId || profile?.session_id,
@@ -63,7 +96,7 @@ export default function PerformanceReportScreen({ route, navigation }) {
       } catch (apiErr) {
         console.warn('Backend report endpoint failed, falling back to local calculation:', apiErr);
         // Fallback local calculation
-        const localReport = computeLocalReport(evaluationsList, totalQ, questions, candidateName, targetRole, sessionId);
+        const localReport = computeLocalReport(evaluationsList, totalQ, answeredAnswers.length, questions, candidateName, targetRole, sessionId);
         setReport(localReport);
       }
     } catch (err) {
@@ -73,9 +106,9 @@ export default function PerformanceReportScreen({ route, navigation }) {
     }
   };
 
-  const computeLocalReport = (evaluations, totalQ, questionList, name, role, sessId) => {
-    const answeredCount = evaluations.length;
+  const computeLocalReport = (evaluations, totalQ, answeredCount, questionList, name, role, sessId) => {
     const completionRate = totalQ > 0 ? Math.round((answeredCount / totalQ) * 1000) / 10 : 0;
+
 
     const relScores = evaluations.map((e) => e.relevance?.relevance_score).filter((s) => typeof s === 'number');
     const covScores = evaluations.map((e) => e.concept_coverage?.coverage_score).filter((s) => typeof s === 'number');
@@ -306,16 +339,24 @@ export default function PerformanceReportScreen({ route, navigation }) {
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header Hero Banner */}
         <View style={styles.headerHero}>
-          <View style={styles.heroTagRow}>
-            <Text style={styles.heroPreTag}>SESSION PERFORMANCE REPORT</Text>
-            <Text style={styles.sessionIdTag}>
-              {report.session_id ? `ID: ${report.session_id.substring(0, 14)}` : 'MOCK SESSION'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <View style={styles.heroTagRow}>
+                <Text style={styles.heroPreTag}>SESSION PERFORMANCE REPORT</Text>
+                <Text style={styles.sessionIdTag}>
+                  {report.session_id ? `ID: ${report.session_id.substring(0, 14)}` : 'MOCK SESSION'}
+                </Text>
+              </View>
+              <Text style={styles.heroTitle}>Comprehensive Evaluation</Text>
+              <Text style={styles.heroSubtitle}>
+                Candidate: <Text style={styles.boldText}>{report.candidate_name}</Text> • Target: <Text style={styles.boldText}>{report.target_role}</Text>
+              </Text>
+            </View>
+            <Image
+              source={Caricatures.trophySuccess || Caricatures.girlReviewReport}
+              style={{ width: 80, height: 80, resizeMode: 'contain' }}
+            />
           </View>
-          <Text style={styles.heroTitle}>Comprehensive Evaluation</Text>
-          <Text style={styles.heroSubtitle}>
-            Candidate: <Text style={styles.boldText}>{report.candidate_name}</Text> • Target: <Text style={styles.boldText}>{report.target_role}</Text>
-          </Text>
         </View>
 
         {/* Overall Readiness Score Card */}
@@ -653,10 +694,10 @@ export default function PerformanceReportScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8F9FA',
   },
   container: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
     width: '100%',
     maxWidth: 960,
@@ -667,16 +708,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    backgroundColor: '#F8F9FA',
   },
   loadingTitle: {
-    color: '#F8FAFC',
+    color: '#111827',
     fontSize: 16,
     fontWeight: '700',
     marginTop: 16,
     textAlign: 'center',
   },
   loadingSub: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 13,
     marginTop: 6,
     textAlign: 'center',
@@ -693,7 +735,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   errorSub: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 20,
@@ -702,12 +744,17 @@ const styles = StyleSheet.create({
 
   // Hero Banner
   headerHero: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 22,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   heroTagRow: {
     flexDirection: 'row',
@@ -716,29 +763,29 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   heroPreTag: {
-    color: '#38BDF8',
+    color: '#4F46E5',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   sessionIdTag: {
-    color: '#64748B',
+    color: '#9CA3AF',
     fontSize: 10,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   heroTitle: {
-    color: '#F8FAFC',
+    color: '#111827',
     fontSize: 22,
     fontWeight: '800',
     marginBottom: 4,
   },
   heroSubtitle: {
-    color: '#94A3B8',
+    color: '#4B5563',
     fontSize: 13,
   },
   boldText: {
-    color: '#CBD5E1',
+    color: '#111827',
     fontWeight: '700',
   },
 
@@ -752,12 +799,12 @@ const styles = StyleSheet.create({
   readinessScoreCol: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F9FAFB',
     borderRadius: 14,
     padding: 16,
     minWidth: 110,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   readinessNumber: {
     color: '#10B981',
@@ -766,8 +813,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   readinessLabel: {
-    color: '#64748B',
-    fontSize: 9,
+    color: '#6B7280',
+    fontSize: 9.5,
     fontWeight: '800',
     marginTop: 2,
     letterSpacing: 0.5,
@@ -785,16 +832,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   tierReady: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
   tierPotential: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderColor: '#38BDF8',
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
   },
   tierPractice: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderColor: '#F59E0B',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
   },
   tierBadgeText: {
     fontSize: 12,
@@ -802,22 +849,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   textReady: {
-    color: '#10B981',
+    color: '#065F46',
   },
   textPotential: {
-    color: '#38BDF8',
+    color: '#4F46E5',
   },
   textPractice: {
-    color: '#F59E0B',
+    color: '#854D0E',
   },
   completionStat: {
-    color: '#F8FAFC',
+    color: '#111827',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 2,
   },
   durationStat: {
-    color: '#64748B',
+    color: '#6B7280',
     fontSize: 11,
   },
 
@@ -830,14 +877,14 @@ const styles = StyleSheet.create({
   matrixBox: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   matrixBoxLabel: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -845,13 +892,13 @@ const styles = StyleSheet.create({
   },
   matrixBoxValue: {
     color: '#10B981',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   matrixBoxSub: {
-    color: '#64748B',
-    fontSize: 10,
+    color: '#9CA3AF',
+    fontSize: 10.5,
     marginTop: 2,
   },
 
@@ -863,18 +910,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: '#A7F3D0',
   },
   strengthIcon: {
     fontSize: 14,
     marginTop: 1,
   },
   strengthText: {
-    color: '#D1FAE5',
+    color: '#065F46',
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
@@ -888,18 +935,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: '#FEF9C3',
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderColor: '#FDE047',
   },
   improvementIcon: {
     fontSize: 14,
     marginTop: 1,
   },
   improvementText: {
-    color: '#FEF3C7',
+    color: '#854D0E',
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
@@ -913,26 +960,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: 'rgba(56, 189, 248, 0.08)',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderColor: '#C7D2FE',
   },
   recNumber: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#38BDF8',
-    color: '#0F172A',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#4F46E5',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 11,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
     marginTop: 1,
   },
   recText: {
-    color: '#E0F2FE',
+    color: '#1E40AF',
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
@@ -940,30 +987,30 @@ const styles = StyleSheet.create({
 
   // Breakdown Section
   breakdownIntro: {
-    color: '#94A3B8',
-    fontSize: 12,
+    color: '#6B7280',
+    fontSize: 12.5,
     marginBottom: 12,
   },
   questionCard: {
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
     overflow: 'hidden',
   },
   questionCardAnswered: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
   },
   questionCardUnanswered: {
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    borderColor: '#1E293B',
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
     opacity: 0.8,
   },
   questionCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
   },
   questionCardTitleRow: {
     flexDirection: 'row',
@@ -972,101 +1019,101 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   questionNumBadge: {
-    backgroundColor: '#1E293B',
-    color: '#38BDF8',
+    backgroundColor: '#EEF2FF',
+    color: '#4F46E5',
     fontSize: 11,
     fontWeight: '800',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#C7D2FE',
     marginTop: 2,
   },
   questionHeaderContent: {
     flex: 1,
   },
   questionTopicText: {
-    color: '#38BDF8',
-    fontSize: 10,
+    color: '#4F46E5',
+    fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   questionShortText: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
+    color: '#111827',
+    fontSize: 13.5,
+    fontWeight: '700',
+    lineHeight: 19,
   },
   statusCol: {
     alignItems: 'flex-end',
     marginLeft: 8,
   },
   statusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   pillAnswered: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#ECFDF5',
   },
   pillUnanswered: {
-    backgroundColor: 'rgba(100, 116, 139, 0.2)',
+    backgroundColor: '#F3F4F6',
   },
   statusPillText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
   },
   pillTextAnswered: {
-    color: '#10B981',
+    color: '#065F46',
   },
   pillTextUnanswered: {
-    color: '#94A3B8',
+    color: '#6B7280',
   },
   expandChevron: {
-    color: '#64748B',
+    color: '#9CA3AF',
     fontSize: 10,
     marginTop: 4,
   },
   questionDetails: {
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
-    padding: 12,
-    backgroundColor: '#090D16',
+    borderTopColor: '#E5E7EB',
+    padding: 14,
+    backgroundColor: '#F9FAFB',
   },
   missingDetailBox: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: '#F59E0B',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
     borderWidth: 1,
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
   },
   missingDetailLabel: {
-    color: '#F59E0B',
+    color: '#854D0E',
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 2,
   },
   missingDetailText: {
-    color: '#FCD34D',
-    fontSize: 11,
-    lineHeight: 15,
+    color: '#854D0E',
+    fontSize: 11.5,
+    lineHeight: 16,
   },
   detailBox: {
     marginBottom: 10,
   },
   detailLabel: {
-    color: '#64748B',
+    color: '#6B7280',
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     marginBottom: 3,
   },
   detailTranscript: {
-    color: '#CBD5E1',
-    fontSize: 12,
+    color: '#374151',
+    fontSize: 12.5,
     lineHeight: 17,
     fontStyle: 'italic',
   },
@@ -1076,7 +1123,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   scorePill: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1084,7 +1133,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   scorePillLabel: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 11,
   },
   scorePillVal: {
@@ -1096,14 +1145,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   conceptLabelCovered: {
-    color: '#10B981',
-    fontSize: 10,
+    color: '#065F46',
+    fontSize: 10.5,
     fontWeight: '800',
     marginBottom: 4,
   },
   conceptLabelMissing: {
-    color: '#EF4444',
-    fontSize: 10,
+    color: '#B91C1C',
+    fontSize: 10.5,
     fontWeight: '800',
     marginBottom: 4,
   },
@@ -1113,68 +1162,68 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chipCovered: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#10B981',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   chipCoveredText: {
-    color: '#6EE7B7',
-    fontSize: 10,
+    color: '#065F46',
+    fontSize: 10.5,
     fontWeight: '600',
   },
   chipMissing: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#EF4444',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    borderColor: '#FECACA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   chipMissingText: {
-    color: '#FCA5A5',
-    fontSize: 10,
+    color: '#B91C1C',
+    fontSize: 10.5,
     fontWeight: '600',
   },
   followupNoteBox: {
-    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    backgroundColor: '#EFF6FF',
     borderLeftWidth: 3,
-    borderLeftColor: '#38BDF8',
-    padding: 8,
+    borderLeftColor: '#3B82F6',
+    padding: 10,
     marginTop: 6,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   followupNoteLabel: {
-    color: '#38BDF8',
-    fontSize: 10,
+    color: '#1E40AF',
+    fontSize: 10.5,
     fontWeight: '800',
     marginBottom: 2,
   },
   followupNoteText: {
-    color: '#F8FAFC',
+    color: '#111827',
     fontSize: 12,
   },
   followupFocusText: {
-    color: '#94A3B8',
-    fontSize: 10,
+    color: '#4B5563',
+    fontSize: 10.5,
     marginTop: 2,
   },
   unansweredNote: {
-    color: '#64748B',
+    color: '#9CA3AF',
     fontSize: 12,
     fontStyle: 'italic',
   },
 
   // Empty State
   emptyCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 28,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
     marginBottom: 16,
   },
   emptyIcon: {
@@ -1182,14 +1231,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   emptyTitle: {
-    color: '#F8FAFC',
+    color: '#111827',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyDesc: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
@@ -1205,27 +1254,27 @@ const styles = StyleSheet.create({
   },
   actionBtnSecondary: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   actionBtnSecondaryText: {
-    color: '#CBD5E1',
+    color: '#374151',
     fontWeight: '700',
     fontSize: 13,
   },
   actionBtnPrimary: {
     flex: 1,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#111827',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
   actionBtnPrimaryText: {
-    color: '#FFFFFF',
+    color: '#FFC82C',
     fontWeight: '800',
     fontSize: 13,
   },
@@ -1242,16 +1291,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   secondaryBtn: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   secondaryBtnText: {
-    color: '#CBD5E1',
+    color: '#374151',
     fontWeight: '600',
     fontSize: 13,
   },

@@ -61,7 +61,8 @@ def _parse_expected_concepts(raw_concepts: Optional[str]) -> List[str]:
     summary="Transcribe audio answer and evaluate relevance & concept coverage"
 )
 async def transcribe_and_evaluate_answer(
-    audio: UploadFile = File(..., description="Audio recording file (WAV, MP3, M4A, WebM, OGG, etc.)"),
+    audio: Optional[UploadFile] = File(None, description="Audio recording file (WAV, MP3, M4A, WebM, OGG, etc.)"),
+    audio_file: Optional[UploadFile] = File(None, description="Alternative field name for audio file"),
     question_id: str = Form(..., description="Unique question ID (e.g. q_1)"),
     question_text: str = Form(..., description="Full text of the interview question"),
     expected_key_concepts: Optional[str] = Form("[]", description="JSON array or comma-separated list of expected concepts"),
@@ -77,6 +78,13 @@ async def transcribe_and_evaluate_answer(
     4. Computes answer relevance against the original question.
     5. Returns structured evaluation linked to profile, session, and question IDs.
     """
+    actual_audio = audio or audio_file
+    if actual_audio is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Audio recording file is required (field 'audio' or 'audio_file')."
+        )
+
     # 1. Validate Question Inputs
     if not question_id or not question_id.strip():
         raise HTTPException(
@@ -105,7 +113,7 @@ async def transcribe_and_evaluate_answer(
 
     # 4. Read Audio File Bytes
     try:
-        audio_bytes = await audio.read()
+        audio_bytes = await actual_audio.read()
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -113,13 +121,13 @@ async def transcribe_and_evaluate_answer(
         )
 
     # 5. Validate Audio Metadata & Size
-    filename = audio.filename or "recording.webm"
+    filename = actual_audio.filename or "recording.webm"
     if filename == "blob" or not os.path.splitext(filename)[1]:
-        if audio.content_type and "mp4" in audio.content_type.lower():
+        if actual_audio.content_type and "mp4" in actual_audio.content_type.lower():
             filename = "recording.mp4"
-        elif audio.content_type and "ogg" in audio.content_type.lower():
+        elif actual_audio.content_type and "ogg" in actual_audio.content_type.lower():
             filename = "recording.ogg"
-        elif audio.content_type and "wav" in audio.content_type.lower():
+        elif actual_audio.content_type and "wav" in actual_audio.content_type.lower():
             filename = "recording.wav"
         else:
             filename = "recording.webm"
@@ -128,7 +136,7 @@ async def transcribe_and_evaluate_answer(
         validate_audio_file(
             filename=filename,
             file_bytes=audio_bytes,
-            content_type=audio.content_type
+            content_type=actual_audio.content_type
         )
     except AudioValidationError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)

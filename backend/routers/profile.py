@@ -1,7 +1,7 @@
 import json
 import os
 import uuid
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from schemas import (
     HealthResponse,
 )
 from module1.pipeline import process_resume_and_jd, recalculate_profile
+
+from module1.parsing.extract_text import extract_text
 
 router = APIRouter(prefix="/api", tags=["Profile & Intelligence"])
 
@@ -38,24 +40,52 @@ def health_check():
 @router.post("/profile", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED)
 async def create_profile(
     resume: UploadFile = File(..., description="Resume in PDF or DOCX format"),
-    jd_text: str = Form(..., description="Target Job Description text"),
+    jd_text: Optional[str] = Form(None, description="Target Job Description text"),
+    jd_file: Optional[UploadFile] = File(None, description="Target Job Description file in PDF or DOCX format"),
     mode: str = Form("mixed", description="Interview mode: hr, technical, resume-based, jd-based, or mixed"),
     db: Session = Depends(get_db)
 ):
     """
     Accepts multipart form-data:
     - resume: PDF or DOCX file
-    - jd_text: Job description text
+    - jd_text: Optional Job description text (if pasted)
+    - jd_file: Optional Job description file (PDF or DOCX)
     - mode: Interview mode
 
     Processes resume and JD through the NLP pipeline, stores profile in SQLite,
     and returns complete Profile JSON.
     """
-    # 1. Validate JD Text
-    if not jd_text or not jd_text.strip():
+    # 1. Resolve and Validate JD Content
+    extracted_jd_text = (jd_text or "").strip()
+    if jd_file and jd_file.filename:
+        jd_filename = jd_file.filename
+        jd_ext = os.path.splitext(jd_filename)[1].lower()
+        if jd_ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail=f"Unsupported JD file type '{jd_ext}'. Please upload a PDF (.pdf) or Word (.docx) file."
+            )
+        jd_file_bytes = await jd_file.read()
+        if len(jd_file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="JD file size exceeds the 10 MB limit."
+            )
+        if len(jd_file_bytes) > 0:
+            try:
+                extracted_jd_file_text = extract_text(jd_file_bytes, filename=jd_filename)
+                if extracted_jd_file_text.strip():
+                    extracted_jd_text = extracted_jd_file_text.strip()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Error reading JD document: {str(e)}"
+                )
+
+    if not extracted_jd_text:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Job Description text cannot be empty."
+            detail="Job Description cannot be empty. Please paste text or upload a JD document (PDF/DOCX)."
         )
 
     # 2. Validate Interview Mode
@@ -100,7 +130,7 @@ async def create_profile(
     try:
         profile_dict = process_resume_and_jd(
             resume_source=file_bytes,
-            jd_text=jd_text,
+            jd_text=extracted_jd_text,
             mode=clean_mode,
             filename=filename,
             profile_id=profile_id
@@ -118,7 +148,7 @@ async def create_profile(
     profile_record = ProfileRecord(
         profile_id=profile_id,
         mode=clean_mode,
-        jd_text=jd_text,
+        jd_text=extracted_jd_text,
         resume_filename=filename,
         resume_path=saved_file_path,
         profile_json=json.dumps(profile_dict),

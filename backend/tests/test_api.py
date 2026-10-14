@@ -143,3 +143,38 @@ def test_api_validation_errors():
         data={"jd_text": "We need Python developer", "mode": "mixed"}
     )
     assert res3.status_code == 415
+
+
+def test_create_profile_with_jd_file():
+    pdf_bytes = _generate_test_pdf_bytes()
+    
+    # Generate JD PDF
+    jd_doc = fitz.open()
+    jd_page = jd_doc.new_page()
+    jd_page.insert_text((50, 72), """
+    Job Title: Backend Software Engineer
+    Requirements:
+    - Must have hands-on experience in Python and FastAPI
+    - Strong knowledge of PostgreSQL
+    - Experience with Docker containerization
+    Responsibilities:
+    - Build resilient microservices and RESTful APIs
+    """)
+    jd_pdf_bytes = jd_doc.tobytes()
+    jd_doc.close()
+
+    files = {
+        "resume": ("candidate_resume.pdf", pdf_bytes, "application/pdf"),
+        "jd_file": ("job_description.pdf", jd_pdf_bytes, "application/pdf"),
+    }
+    data = {
+        "mode": "technical"
+    }
+
+    response = client.post("/api/profile", files=files, data=data)
+    assert response.status_code == 201
+    profile = response.json()
+    assert profile["job"]["title"] == "Backend Software Engineer"
+    assert "Python" in profile["job"]["required_skills"]
+    assert profile["profile_id"] is not None
+

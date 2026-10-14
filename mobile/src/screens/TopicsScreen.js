@@ -7,9 +7,12 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
 import { useProfileStore } from '../store/profileStore';
 import SectionCard from '../components/SectionCard';
+import Caricatures from '../assets/caricatures';
+
 
 export default function TopicsScreen({ navigation }) {
   const { currentProfile } = useProfileStore();
@@ -70,11 +73,19 @@ export default function TopicsScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.container}>
         {/* Module 2 Integration Banner */}
         <View style={styles.integrationBanner}>
-          <View style={styles.integrationHeader}>
-            <Text style={styles.integrationTag}>MODULE 2 HANDOFF READY</Text>
-            <Text style={styles.topicsCountBadge}>{interview_topics.length} Topics</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
+            <Image
+              source={Caricatures.whiteboardPresenter || Caricatures.puzzleSkills}
+              style={{ width: 68, height: 68, resizeMode: 'contain', marginRight: 14 }}
+            />
+            <View style={{ flex: 1 }}>
+              <View style={styles.integrationHeader}>
+                <Text style={styles.integrationTag}>MODULE 2: TOPICS READY</Text>
+                <Text style={styles.topicsCountBadge}>{interview_topics.length} Topics</Text>
+              </View>
+              <Text style={styles.integrationTitle}>Targeted Interview Topics</Text>
+            </View>
           </View>
-          <Text style={styles.integrationTitle}>Targeted Interview Topics</Text>
           <Text style={styles.integrationDesc}>
             Topics generated for {job.title} ({mode.toUpperCase()} mode), prioritized by resume skill gaps, candidate projects, and key role deliverables.
           </Text>
@@ -142,11 +153,14 @@ export default function TopicsScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8F9FA',
   },
   container: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   emptyContainer: {
     flex: 1,
@@ -155,17 +169,22 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: '#6B7280',
     fontSize: 16,
     marginBottom: 16,
   },
   integrationBanner: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   integrationHeader: {
     flexDirection: 'row',
@@ -174,45 +193,45 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   integrationTag: {
-    fontSize: 10,
-    color: '#38BDF8',
+    fontSize: 10.5,
+    color: '#4F46E5',
     fontWeight: '800',
     letterSpacing: 1,
   },
   topicsCountBadge: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    color: '#065F46',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
-    borderColor: '#10B981',
+    borderColor: '#A7F3D0',
     borderWidth: 1,
   },
   integrationTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: '#111827',
     marginBottom: 4,
   },
   integrationDesc: {
-    fontSize: 12,
-    color: '#94A3B8',
-    lineHeight: 17,
-    marginBottom: 12,
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
+    marginBottom: 14,
   },
   filterRow: {
     flexDirection: 'row',
     gap: 8,
   },
   filterPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   filterPillActive: {
     backgroundColor: '#3B82F6',
@@ -221,18 +240,23 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: '#4B5563',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
   },
   topicCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
+    padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   topicTopRow: {
     flexDirection: 'row',
@@ -241,16 +265,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   topicRankBadge: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#334155',
   },
   topicRankNum: {
     fontSize: 11,
-    color: '#38BDF8',
+    color: '#111827',
     fontWeight: '800',
   },
   priorityBadge: {
@@ -265,65 +287,66 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   highBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   highText: {
-    color: '#F87171',
+    color: '#B91C1C',
   },
   mediumBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderColor: '#F59E0B',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
   },
   mediumText: {
-    color: '#FBBF24',
+    color: '#854D0E',
   },
   lowBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderColor: '#3B82F6',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
   },
   lowText: {
-    color: '#60A5FA',
+    color: '#1E40AF',
   },
   topicTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: '#111827',
     marginBottom: 10,
   },
   reasonBox: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F9FAFB',
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
   },
   reasonLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: '800',
+    color: '#6B7280',
     textTransform: 'uppercase',
     marginBottom: 2,
+    letterSpacing: 0.5,
   },
   reasonText: {
-    fontSize: 12,
-    color: '#CBD5E1',
-    lineHeight: 16,
+    fontSize: 12.5,
+    color: '#374151',
+    lineHeight: 17,
   },
   startInterviewBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#111827',
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 15,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   startInterviewBtnText: {
-    color: '#FFFFFF',
+    color: '#FFC82C',
     fontSize: 15,
     fontWeight: '800',
   },
