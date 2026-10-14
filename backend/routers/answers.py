@@ -176,27 +176,37 @@ async def transcribe_and_evaluate_answer(
     )
 
     # 8. Evaluate Concept Coverage and Relevance
+    words = [w for w in transcript_text.strip().split() if w]
+    is_silent = len(words) < 3
+
     evaluation = evaluate_answer(
         question_id=question_id.strip(),
         question_text=question_text.strip(),
         expected_concepts=concept_list,
-        transcript=transcript_text,
+        transcript=transcript_text if not is_silent else "",
         profile_id=profile_id.strip() if profile_id else None,
         session_id=session_id.strip() if session_id else None,
         metadata=metadata
     )
 
-    # 9. Compute Module 4 Speaking Delivery Metrics
-    try:
-        delivery_res = analyze_speaking_delivery(
-            transcript=transcript_text,
-            duration_seconds=transcription_result.get("duration_seconds"),
-            segments=transcription_result.get("segments"),
-        )
-        evaluation.delivery_metrics = delivery_res
-    except Exception as de:
-        logger.warning(f"Module 4 speaking delivery calculation skipped: {de}")
+    if is_silent:
+        evaluation.relevance.relevance_score = 0.0
+        evaluation.concept_coverage.coverage_score = 0.0
+        evaluation.concept_coverage.covered_concepts = []
+        evaluation.concept_coverage.partially_covered_concepts = []
         evaluation.delivery_metrics = None
+    else:
+        # 9. Compute Module 4 Speaking Delivery Metrics
+        try:
+            delivery_res = analyze_speaking_delivery(
+                transcript=transcript_text,
+                duration_seconds=transcription_result.get("duration_seconds"),
+                segments=transcription_result.get("segments"),
+            )
+            evaluation.delivery_metrics = delivery_res
+        except Exception as de:
+            logger.warning(f"Module 4 speaking delivery calculation skipped: {de}")
+            evaluation.delivery_metrics = None
 
     # Attach Visual Metrics
     evaluation.visual_metrics = visual_analysis_result

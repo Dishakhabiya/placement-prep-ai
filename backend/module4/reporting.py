@@ -22,9 +22,15 @@ def aggregate_session_report(
     Computes genuine averages for relevance, concept coverage, delivery pacing,
     filler words, pauses, and computer vision framing stability.
     """
-    answered_count = len(evaluations)
+    # Count truly answered evaluations (with genuine speech)
+    genuine_evaluations = [
+        ev for ev in evaluations
+        if int(ev.get("transcript_metadata", {}).get("word_count", 0)) >= 3
+        and ev.get("transcript_metadata", {}).get("transcript", "").strip()
+    ]
+    answered_count = len(genuine_evaluations)
     total_q_count = total_questions if total_questions and total_questions > 0 else (
-        len(questions) if questions else max(answered_count, 1)
+        len(questions) if questions else max(len(evaluations), 1)
     )
 
     if total_q_count < answered_count:
@@ -56,6 +62,8 @@ def aggregate_session_report(
         qid = str(ev.get("question_id", ""))
         if qid:
             eval_by_qid[qid] = ev
+
+    for ev in genuine_evaluations:
 
         # Relevance
         rel = ev.get("relevance", {})
@@ -115,11 +123,17 @@ def aggregate_session_report(
                 face_centering_ratios.append(float(vis["face_centering_ratio"]))
 
     # 2. Compute Aggregates
-    avg_relevance = round(sum(relevance_scores) / len(relevance_scores), 1) if relevance_scores else 0.0
-    avg_coverage = round(sum(coverage_scores) / len(coverage_scores), 1) if coverage_scores else 0.0
+    if total_words_spoken == 0:
+        avg_relevance = 0.0
+        avg_coverage = 0.0
+    else:
+        avg_relevance = round(sum(relevance_scores) / len(relevance_scores), 1) if relevance_scores else 0.0
+        avg_coverage = round(sum(coverage_scores) / len(coverage_scores), 1) if coverage_scores else 0.0
 
     # Overall WPM: prefer overall total words / duration, or average of WPM list
-    if total_speaking_duration > 0 and total_words_spoken > 0:
+    if total_words_spoken == 0:
+        avg_wpm = 0.0
+    elif total_speaking_duration > 0:
         avg_wpm = round((total_words_spoken / total_speaking_duration) * 60.0, 1)
     elif wpm_list:
         avg_wpm = round(sum(wpm_list) / len(wpm_list), 1)
@@ -162,7 +176,7 @@ def aggregate_session_report(
 
     # 3. Overall Readiness Score (0-100)
     # Blend: 40% Relevance, 35% Concept Coverage, 15% Delivery (pace & low fillers), 10% Visual presence
-    if answered_count > 0:
+    if answered_count > 0 and total_words_spoken > 0:
         delivery_score = 85.0
         if avg_wpm > 0:
             if 115.0 <= avg_wpm <= 160.0:
@@ -207,9 +221,9 @@ def aggregate_session_report(
             strengths.append(f"High answer relevance ({avg_relevance}%), directly addressing interview questions.")
         if avg_coverage >= 70.0:
             strengths.append(f"Strong concept coverage ({avg_coverage}%), demonstrating solid domain terminology.")
-        if 110.0 <= avg_wpm <= 165.0:
+        if 110.0 <= avg_wpm <= 165.0 and total_words_spoken >= 15:
             strengths.append(f"Optimal speaking pace ({avg_wpm} WPM), maintaining clear conversational rhythm.")
-        if overall_filler_pct <= 3.0:
+        if overall_filler_pct <= 3.0 and total_words_spoken >= 15:
             strengths.append(f"Clean speech delivery with very low filler usage ({overall_filler_pct}%).")
         if avg_face_presence is not None and avg_face_presence >= 80.0:
             strengths.append(f"Consistent camera framing presence ({avg_face_presence}%) throughout the session.")
@@ -298,6 +312,10 @@ def aggregate_session_report(
                 deliv = ev.get("delivery_metrics", {}) or {}
                 vis = ev.get("visual_metrics", {}) or {}
 
+                words_cnt = int(meta.get("word_count", 0))
+                q_transcript = meta.get("transcript", "")
+                is_q_answered = words_cnt >= 3 and bool(q_transcript.strip())
+
                 breakdown.append(
                     QuestionReportItem(
                         question_id=qid,
@@ -305,13 +323,13 @@ def aggregate_session_report(
                         target_topic=q.get("target_topic"),
                         category=q.get("category"),
                         difficulty=q.get("difficulty"),
-                        status="answered",
-                        transcript=meta.get("transcript", ""),
-                        relevance_score=float(rel.get("relevance_score", 0.0)) if "relevance_score" in rel else None,
-                        coverage_score=float(cov.get("coverage_score", 0.0)) if "coverage_score" in cov else None,
-                        covered_concepts=cov.get("covered_concepts", []),
+                        status="answered" if is_q_answered else "skipped",
+                        transcript=q_transcript if is_q_answered else None,
+                        relevance_score=float(rel.get("relevance_score", 0.0)) if (is_q_answered and "relevance_score" in rel) else None,
+                        coverage_score=float(cov.get("coverage_score", 0.0)) if (is_q_answered and "coverage_score" in cov) else None,
+                        covered_concepts=cov.get("covered_concepts", []) if is_q_answered else [],
                         missing_concepts=cov.get("missing_concepts", []),
-                        words_per_minute=float(deliv.get("words_per_minute")) if deliv.get("words_per_minute") is not None else None,
+                        words_per_minute=float(deliv.get("words_per_minute")) if (is_q_answered and deliv.get("words_per_minute") is not None) else None,
                         filler_word_count=int(deliv.get("total_filler_words", 0)) if "total_filler_words" in deliv else None,
                         extended_pause_count=int(deliv.get("extended_pause_count", 0)) if "extended_pause_count" in deliv else None,
                         face_presence_ratio=float(vis.get("face_presence_ratio")) if vis.get("face_presence_ratio") is not None else None,

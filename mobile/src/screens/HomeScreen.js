@@ -19,6 +19,7 @@ export default function HomeScreen({ navigation }) {
 
   const {
     profilesList,
+    currentProfile,
     backendHealthy,
     checkBackendHealth,
     loadInitialData,
