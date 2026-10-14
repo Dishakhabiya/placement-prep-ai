@@ -39,8 +39,16 @@ export default function PerformanceReportScreen({ route, navigation }) {
       setLoading(true);
       setError(null);
 
-      // All answered questions (status = 'saved', whether evaluated or not)
-      const answeredAnswers = sessionAnswersArray.filter((a) => a && (a.status === 'saved' || a.evaluated));
+      // All genuinely answered questions (status = 'saved', genuine spoken transcript)
+      const answeredAnswers = sessionAnswersArray.filter((a) => {
+        if (!a) return false;
+        if (a.status === 'skipped') return false;
+        const transcript = (a.transcript || '').trim();
+        if (!transcript || transcript.toLowerCase() === 'no speech detected' || transcript.toLowerCase() === 'terminated early without speech') {
+          return false;
+        }
+        return a.status === 'saved' || a.evaluated;
+      });
 
       // Extract evaluations — include answers where evaluation ran OR create a stub from transcript
       const evaluationsList = answeredAnswers.map((a) => {
@@ -159,36 +167,49 @@ export default function PerformanceReportScreen({ route, navigation }) {
       readiness = Math.round((avgRel * 0.4 + avgCov * 0.4 + (avgWpm > 110 && avgWpm < 165 ? 90 : 70) * 0.2) * 10) / 10;
     }
 
-    const readinessTier = readiness >= 75 && completionRate >= 70 ? 'Placement Ready' : readiness >= 55 ? 'Strong Potential' : 'Needs Practice';
+    const readinessTier = answeredCount === 0 ? 'Needs Practice' : (readiness >= 75 && completionRate >= 70 ? 'Placement Ready' : readiness >= 55 ? 'Strong Potential' : 'Needs Practice');
 
     const strengths = [];
-    if (avgRel >= 70) strengths.push(`High answer relevance (${avgRel}%), directly answering interview questions.`);
-    if (avgCov >= 70) strengths.push(`Strong concept coverage (${avgCov}%), demonstrating good domain knowledge.`);
-    if (avgWpm >= 110 && avgWpm <= 165) strengths.push(`Optimal speaking pace (${avgWpm} WPM).`);
-    if (overallFillerPct <= 3.0 && totalWords > 0) strengths.push(`Low filler word frequency (${overallFillerPct}%).`);
-    if (avgPresence && avgPresence >= 80) strengths.push(`Consistent camera framing presence (${avgPresence}%).`);
-    if (strengths.length === 0 && answeredCount > 0) strengths.push('Successfully submitted spoken interview responses.');
+    if (answeredCount > 0) {
+      if (avgRel >= 70) strengths.push(`High answer relevance (${avgRel}%), directly answering interview questions.`);
+      if (avgCov >= 70) strengths.push(`Strong concept coverage (${avgCov}%), demonstrating good domain knowledge.`);
+      if (avgWpm >= 110 && avgWpm <= 165) strengths.push(`Optimal speaking pace (${avgWpm} WPM).`);
+      if (overallFillerPct <= 3.0 && totalWords > 0) strengths.push(`Low filler word frequency (${overallFillerPct}%).`);
+      if (avgPresence && avgPresence >= 80) strengths.push(`Consistent camera framing presence (${avgPresence}%).`);
+      if (strengths.length === 0) strengths.push('Successfully submitted spoken interview responses.');
+    }
 
     const improvements = [];
-    if (avgCov < 65) improvements.push(`Concept coverage averaged ${avgCov}%. Include more expected key concepts.`);
-    if (avgRel < 65) improvements.push(`Answer relevance averaged ${avgRel}%. Focus closer on the interviewer's prompt.`);
-    if (overallFillerPct > 4) improvements.push(`Filler word density reached ${overallFillerPct}%.`);
-    if (totalPauses >= 3) improvements.push(`Detected ${totalPauses} extended pauses (>1.5s).`);
-    if (answeredCount < totalQ) improvements.push(`Completed ${answeredCount} of ${totalQ} questions.`);
+    if (answeredCount === 0) {
+      improvements.push('No spoken responses were recorded. Record your voice during questions to receive readiness and delivery metrics.');
+    } else {
+      if (avgCov < 65) improvements.push(`Concept coverage averaged ${avgCov}%. Include more expected key concepts.`);
+      if (avgRel < 65) improvements.push(`Answer relevance averaged ${avgRel}%. Focus closer on the interviewer's prompt.`);
+      if (overallFillerPct > 4) improvements.push(`Filler word density reached ${overallFillerPct}%.`);
+      if (totalPauses >= 3) improvements.push(`Detected ${totalPauses} extended pauses (>1.5s).`);
+      if (answeredCount < totalQ) improvements.push(`Completed ${answeredCount} of ${totalQ} questions.`);
+    }
 
-    const recommendations = [
-      'Review missing concepts identified across questions to deepen technical breadth.',
-      'Practice pausing silently instead of using verbal filler words.',
-      'Maintain an upright seated posture centered in front of the camera.',
-    ];
+    const recommendations = answeredCount === 0
+      ? [
+          'Enable microphone permissions and speak clearly into the mic when recording starts.',
+          'State key technical definitions and concepts directly aligned with the question.',
+          'Practice answering all assigned questions to simulate a real placement interview.',
+        ]
+      : [
+          'Review missing concepts identified across questions to deepen technical breadth.',
+          'Practice pausing silently instead of using verbal filler words.',
+          'Maintain an upright seated posture centered in front of the camera.',
+        ];
 
     const breakdown = (questionList || []).map((q) => {
-      const ans = (sessionAnswers || []).find((a) => (a.question?.question_id === q.question_id) || (a.question_id === q.question_id));
+      const ans = (sessionAnswersArray || []).find((a) => (a.question?.question_id === q.question_id) || (a.question_id === q.question_id));
       const ev = ans?.evaluation || evaluations.find((e) => e.question_id === q.question_id);
-      const isAnswered = !!ans || (ev && ev.status !== 'unanswered' && ev.status !== 'skipped');
+      const transcriptText = ev?.transcript_metadata?.transcript || ans?.transcript || '';
+      const hasRealTranscript = !!transcriptText && transcriptText.trim().length > 0 && transcriptText.toLowerCase() !== 'no speech detected' && transcriptText.toLowerCase() !== 'terminated early without speech';
+      const isAnswered = ans?.status !== 'skipped' && hasRealTranscript && (ans?.status === 'saved' || (ev && ev.status !== 'unanswered' && ev.status !== 'skipped'));
+
       if (isAnswered) {
-        const transcriptText = ev?.transcript_metadata?.transcript || ans?.transcript || '';
-        const hasTranscript = !!transcriptText && transcriptText.trim().length > 0;
         const hasEvaluation = typeof ev?.relevance?.relevance_score === 'number';
         return {
           question_id: q.question_id,
@@ -198,9 +219,9 @@ export default function PerformanceReportScreen({ route, navigation }) {
           difficulty: q.difficulty,
           status: 'answered',
           transcript: transcriptText,
-          has_transcript: hasTranscript,
+          has_transcript: true,
           has_evaluation: hasEvaluation,
-          transcript_status: hasTranscript ? 'available' : (ans?.isEvaluating ? 'pending' : 'missing'),
+          transcript_status: 'available',
           evaluation_status: hasEvaluation ? 'available' : (ans?.isEvaluating ? 'pending' : 'missing'),
           relevance_score: ev?.relevance?.relevance_score ?? null,
           coverage_score: ev?.concept_coverage?.coverage_score ?? null,

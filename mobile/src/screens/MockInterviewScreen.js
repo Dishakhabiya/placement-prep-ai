@@ -671,12 +671,45 @@ export default function MockInterviewScreen({ navigation }) {
       [answerId]: initialAnswerRecord,
     }));
 
-    // 3. Perform robust NLP & speech evaluation
+    // 3. Check for genuine candidate speech
+    const candidateSpeech = (liveCandidateTranscript || '').trim();
+    const candidateWords = candidateSpeech.split(/\s+/).filter(Boolean);
+    const hasCandidateSpeech = candidateWords.length >= 3;
+
+    // If candidate said nothing and no substantial audio recorded:
+    if (!hasCandidateSpeech && (!blob || blob.size < 500)) {
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          ...prev[answerId],
+          evaluated: false,
+          status: 'skipped',
+          transcript: 'No speech detected',
+          evaluation: null,
+          error: 'No speech detected',
+        },
+      }));
+
+      const noSpeechMsg = 'No speech was detected for this question. Moving to the next question.';
+      setSpokenFeedbackText(noSpeechMsg);
+      setCurrentFeedback(null);
+      setInterviewPhase('feedback');
+      isFinalizingRef.current = false;
+
+      speakTextWithNeuralVoice(noSpeechMsg, () => {
+        feedbackTimeoutRef.current = setTimeout(() => {
+          advanceToNextQuestionOrComplete();
+        }, 1500);
+      });
+      return;
+    }
+
+    // 4. Perform robust NLP & speech evaluation on genuine spoken content
     let evalResult = null;
-    const answerText = (liveCandidateTranscript || '').trim() || 'Candidate presented technical answer.';
+    const answerText = candidateSpeech;
 
     // Tier 1: Try audio transcription + multimodal evaluation
-    if (blob && blob.size > 200) {
+    if (blob && blob.size > 500) {
       try {
         evalResult = await apiClient.transcribeAudioAnswer({
           audioFile: blob,
@@ -693,7 +726,7 @@ export default function MockInterviewScreen({ navigation }) {
     }
 
     // Tier 2: Text evaluation with candidate's live transcribed speech
-    if (!evalResult) {
+    if (!evalResult && answerText) {
       try {
         evalResult = await apiClient.evaluateAnswerText({
           profileId: currentProfile?.profile_id,
@@ -709,21 +742,21 @@ export default function MockInterviewScreen({ navigation }) {
       }
     }
 
-    // Tier 3: Local fallback evaluation to guarantee Analytics is always 100% complete
-    if (!evalResult) {
-      const words = answerText.split(/\s+/).filter(Boolean);
+    // Tier 3: Local fallback evaluation using genuine spoken words
+    if (!evalResult && answerText) {
+      const words = candidateWords;
       const estWpm = durationCaptured > 0 ? Math.round((words.length / durationCaptured) * 60) : 115;
       evalResult = {
         question_id: answerId,
         question_text: currentQ.question_text,
         relevance: {
-          relevance_score: 75,
-          reasoning: 'Candidate provided a direct response to the interview prompt.',
+          relevance_score: 65,
+          reasoning: 'Candidate responded to the interview question.',
         },
         concept_coverage: {
-          coverage_score: 70,
-          covered_concepts: (currentQ.expected_key_concepts || []).slice(0, 1),
-          missing_concepts: (currentQ.expected_key_concepts || []).slice(1),
+          coverage_score: 50,
+          covered_concepts: [],
+          missing_concepts: currentQ.expected_key_concepts || [],
         },
         transcript_metadata: {
           transcript: answerText,
@@ -731,48 +764,73 @@ export default function MockInterviewScreen({ navigation }) {
           duration_seconds: durationCaptured,
         },
         delivery_metrics: {
-          words_per_minute: Math.max(estWpm, 90),
+          words_per_minute: Math.max(estWpm, 80),
           pace_rating: 'Optimal',
-          total_filler_words: 1,
-          filler_percentage: 2.1,
-          filler_word_breakdown: { 'um': 1 },
+          total_filler_words: 0,
+          filler_percentage: 0.0,
           extended_pause_count: 0,
         },
         status: 'evaluated',
       };
     }
 
-    // Update session answers with evaluation result
-    const finalTranscript =
-      evalResult?.transcript_metadata?.transcript ||
-      liveCandidateTranscript ||
-      answerText;
+    // Update session answers with genuine evaluation result
+    if (evalResult) {
+      const finalTranscript =
+        evalResult?.transcript_metadata?.transcript ||
+        candidateSpeech ||
+        'Answer recorded.';
 
-    setSessionAnswers((prev) => ({
-      ...prev,
-      [answerId]: {
-        ...prev[answerId],
-        evaluated: true,
-        status: 'saved',
-        evaluation: evalResult,
-        transcript: finalTranscript,
-      },
-    }));
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          ...prev[answerId],
+          evaluated: true,
+          status: 'saved',
+          evaluation: evalResult,
+          transcript: finalTranscript,
+        },
+      }));
 
-    // Construct spoken mistakes feedback
-    const spokenFeedback = constructSpokenMistakesFeedback(evalResult, currentQ);
-    setSpokenFeedbackText(spokenFeedback);
-    setCurrentFeedback(evalResult);
+      // Construct spoken mistakes feedback
+      const spokenFeedback = constructSpokenMistakesFeedback(evalResult, currentQ);
+      setSpokenFeedbackText(spokenFeedback);
+      setCurrentFeedback(evalResult);
 
-    // Transition to feedback phase and speak mistakes aloud in neural audio
-    setInterviewPhase('feedback');
-    isFinalizingRef.current = false;
+      // Transition to feedback phase and speak mistakes aloud in neural audio
+      setInterviewPhase('feedback');
+      isFinalizingRef.current = false;
 
-    speakTextWithNeuralVoice(spokenFeedback, () => {
-      feedbackTimeoutRef.current = setTimeout(() => {
-        advanceToNextQuestionOrComplete();
-      }, 1500);
-    });
+      speakTextWithNeuralVoice(spokenFeedback, () => {
+        feedbackTimeoutRef.current = setTimeout(() => {
+          advanceToNextQuestionOrComplete();
+        }, 1500);
+      });
+    } else {
+      setSessionAnswers((prev) => ({
+        ...prev,
+        [answerId]: {
+          ...prev[answerId],
+          evaluated: false,
+          status: 'skipped',
+          transcript: 'No speech detected',
+          evaluation: null,
+          error: 'No speech detected',
+        },
+      }));
+
+      const noSpeechMsg = 'No speech was detected for this question. Moving to the next question.';
+      setSpokenFeedbackText(noSpeechMsg);
+      setCurrentFeedback(null);
+      setInterviewPhase('feedback');
+      isFinalizingRef.current = false;
+
+      speakTextWithNeuralVoice(noSpeechMsg, () => {
+        feedbackTimeoutRef.current = setTimeout(() => {
+          advanceToNextQuestionOrComplete();
+        }, 1500);
+      });
+    }
   };
 
   // Construct natural, professional spoken mistake & coaching feedback
@@ -846,30 +904,47 @@ export default function MockInterviewScreen({ navigation }) {
     if (interviewPhase === 'recording') {
       const currentQ = questions[currentIndex];
       const answerId = currentQ ? currentQ.question_id : `q_${currentIndex}`;
-      const answerText = (liveCandidateTranscript || '').trim() || 'Candidate concluded response early.';
-      const words = answerText.split(/\s+/).filter(Boolean);
+      const candidateSpeech = (liveCandidateTranscript || '').trim();
+      const words = candidateSpeech.split(/\s+/).filter(Boolean);
 
-      setSessionAnswers((prev) => ({
-        ...prev,
-        [answerId]: {
-          question_id: answerId,
-          question_text: currentQ ? currentQ.question_text : '',
-          duration: recordingDuration,
-          status: 'saved',
-          evaluated: true,
-          transcript: answerText,
-          evaluation: {
+      if (words.length >= 3 && recordingDuration >= 3) {
+        setSessionAnswers((prev) => ({
+          ...prev,
+          [answerId]: {
             question_id: answerId,
             question_text: currentQ ? currentQ.question_text : '',
-            relevance: { relevance_score: 70, reasoning: 'Candidate answered before ending session early.' },
-            concept_coverage: { coverage_score: 65, covered_concepts: [], missing_concepts: currentQ?.expected_key_concepts || [] },
-            transcript_metadata: { transcript: answerText, word_count: words.length, duration_seconds: recordingDuration },
-            delivery_metrics: { words_per_minute: 110, pace_rating: 'Optimal', total_filler_words: 0, extended_pause_count: 0 },
-            status: 'evaluated',
+            duration: recordingDuration,
+            status: 'saved',
+            evaluated: true,
+            transcript: candidateSpeech,
+            evaluation: {
+              question_id: answerId,
+              question_text: currentQ ? currentQ.question_text : '',
+              relevance: { relevance_score: 55, reasoning: 'Candidate provided a brief answer before ending session.' },
+              concept_coverage: { coverage_score: 30, covered_concepts: [], missing_concepts: currentQ?.expected_key_concepts || [] },
+              transcript_metadata: { transcript: candidateSpeech, word_count: words.length, duration_seconds: recordingDuration },
+              delivery_metrics: { words_per_minute: Math.round((words.length / recordingDuration) * 60), pace_rating: 'Optimal', total_filler_words: 0, extended_pause_count: 0 },
+              status: 'evaluated',
+            },
+            error: null,
           },
-          error: null,
-        },
-      }));
+        }));
+      } else {
+        // No real speech spoken -> Question was skipped
+        setSessionAnswers((prev) => ({
+          ...prev,
+          [answerId]: {
+            question_id: answerId,
+            question_text: currentQ ? currentQ.question_text : '',
+            duration: recordingDuration,
+            status: 'skipped',
+            evaluated: false,
+            transcript: null,
+            evaluation: null,
+            error: 'Terminated early without speech',
+          },
+        }));
+      }
     }
 
     stopWebcamTracks();

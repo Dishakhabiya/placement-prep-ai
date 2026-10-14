@@ -42,10 +42,20 @@ export default function HomeScreen({ navigation }) {
 
   const navItems = [
     { name: 'Home', icon: '🏠', action: () => {} },
-    { name: 'Analyses', icon: '🔍', action: () => navigation.navigate('Upload') },
-    { name: 'Interview Modes', icon: '💬', action: () => navigation.navigate('Upload') },
+    { name: 'Resume & JD Upload', icon: '📄', action: () => navigation.navigate('Upload') },
+    { name: 'Ranked Interview Topics', icon: '🎯', action: () => navigation.navigate('Topics') },
     { name: 'Saved Profiles', icon: '📁', action: () => navigation.navigate('History') },
-    { name: 'My Learning', icon: '📖', action: () => navigation.navigate('Topics') },
+    {
+      name: 'Mock Interview',
+      icon: '🎙️',
+      action: () => {
+        if (currentProfile) {
+          navigation.navigate('MockInterview');
+        } else {
+          navigation.navigate('Upload');
+        }
+      },
+    },
   ];
 
   const profileIllustrations = [

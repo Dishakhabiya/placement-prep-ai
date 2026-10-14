@@ -202,75 +202,86 @@ def aggregate_session_report(
 
     # 4. Generate Key Strengths
     strengths: List[str] = []
-    if avg_relevance >= 70.0:
-        strengths.append(f"High answer relevance ({avg_relevance}%), directly addressing interview questions.")
-    if avg_coverage >= 70.0:
-        strengths.append(f"Strong concept coverage ({avg_coverage}%), demonstrating solid domain terminology.")
-    if 110.0 <= avg_wpm <= 165.0:
-        strengths.append(f"Optimal speaking pace ({avg_wpm} WPM), maintaining clear conversational rhythm.")
-    if total_words_spoken > 0 and overall_filler_pct <= 3.0:
-        strengths.append(f"Clean speech delivery with very low filler usage ({overall_filler_pct}%).")
-    if avg_face_presence is not None and avg_face_presence >= 80.0:
-        strengths.append(f"Consistent camera framing presence ({avg_face_presence}%) throughout the session.")
-    if answered_count == total_q_count and total_q_count > 0:
-        strengths.append(f"Full session completion ({answered_count}/{total_q_count} questions answered).")
-
-    if not strengths and answered_count > 0:
-        strengths.append("Successfully completed mock interview questions with active audio transcription.")
+    if answered_count > 0 and total_words_spoken > 0:
+        if avg_relevance >= 70.0:
+            strengths.append(f"High answer relevance ({avg_relevance}%), directly addressing interview questions.")
+        if avg_coverage >= 70.0:
+            strengths.append(f"Strong concept coverage ({avg_coverage}%), demonstrating solid domain terminology.")
+        if 110.0 <= avg_wpm <= 165.0:
+            strengths.append(f"Optimal speaking pace ({avg_wpm} WPM), maintaining clear conversational rhythm.")
+        if overall_filler_pct <= 3.0:
+            strengths.append(f"Clean speech delivery with very low filler usage ({overall_filler_pct}%).")
+        if avg_face_presence is not None and avg_face_presence >= 80.0:
+            strengths.append(f"Consistent camera framing presence ({avg_face_presence}%) throughout the session.")
+        if answered_count == total_q_count and total_q_count > 0:
+            strengths.append(f"Full session completion ({answered_count}/{total_q_count} questions answered).")
 
     # 5. Generate Areas for Improvement
     improvements: List[str] = []
-    if avg_coverage < 65.0:
+    if answered_count == 0 or total_words_spoken == 0:
         improvements.append(
-            f"Concept coverage averaged {avg_coverage}%. Integrate more technical keywords and architectural principles."
+            "No spoken answers were detected during this interview session. Please speak your answer into the microphone during active recording to receive AI evaluation."
         )
-    if avg_relevance < 65.0:
-        improvements.append(
-            f"Answer relevance was {avg_relevance}%. Focus answers directly on the core scenario asked by the interviewer."
-        )
-    if avg_wpm > 165.0:
-        improvements.append(
-            f"Pacing was fast ({avg_wpm} WPM). Slow down slightly during complex technical explanations to improve clarity."
-        )
-    elif 0 < avg_wpm < 105.0:
-        improvements.append(
-            f"Speaking pace was deliberate ({avg_wpm} WPM). Practice structured transitions to speak more fluidly."
-        )
-    if overall_filler_pct > 4.0:
-        top_str = ", ".join([f"'{w}'" for w in list(sorted_fillers.keys())[:3]])
-        improvements.append(
-            f"Filler word density reached {overall_filler_pct}% ({total_fillers} total; top fillers: {top_str}). Replace with brief pauses."
-        )
-    if total_extended_pauses >= 3:
-        improvements.append(
-            f"Detected {total_extended_pauses} extended pauses (>1.5s). Organize thoughts using the STAR method before speaking."
-        )
-    if avg_face_presence is not None and avg_face_presence < 70.0:
-        improvements.append(
-            f"Face presence in camera was {avg_face_presence}%. Adjust webcam angle and seat height to remain centered."
-        )
-    if answered_count < total_q_count:
-        improvements.append(
-            f"Completed {answered_count} of {total_q_count} questions. Practice answering all questions to simulate real interviews."
-        )
+    else:
+        if avg_coverage < 65.0:
+            improvements.append(
+                f"Concept coverage averaged {avg_coverage}%. Integrate more technical keywords and architectural principles."
+            )
+        if avg_relevance < 65.0:
+            improvements.append(
+                f"Answer relevance was {avg_relevance}%. Focus answers directly on the core scenario asked by the interviewer."
+            )
+        if avg_wpm > 165.0:
+            improvements.append(
+                f"Pacing was fast ({avg_wpm} WPM). Slow down slightly during complex technical explanations to improve clarity."
+            )
+        elif 0 < avg_wpm < 105.0:
+            improvements.append(
+                f"Speaking pace was deliberate ({avg_wpm} WPM). Practice structured transitions to speak more fluidly."
+            )
+        if overall_filler_pct > 4.0:
+            top_str = ", ".join([f"'{w}'" for w in list(sorted_fillers.keys())[:3]])
+            improvements.append(
+                f"Filler word density reached {overall_filler_pct}% ({total_fillers} total; top fillers: {top_str}). Replace with brief pauses."
+            )
+        if total_extended_pauses >= 3:
+            improvements.append(
+                f"Detected {total_extended_pauses} extended pauses (>1.5s). Organize thoughts using the STAR method before speaking."
+            )
+        if avg_face_presence is not None and avg_face_presence < 70.0:
+            improvements.append(
+                f"Face presence in camera was {avg_face_presence}%. Adjust webcam angle and seat height to remain centered."
+            )
+        if answered_count < total_q_count:
+            improvements.append(
+                f"Completed {answered_count} of {total_q_count} questions. Practice answering all questions to simulate real interviews."
+            )
 
     # 6. Actionable Coaching Recommendations
     recommendations: List[str] = []
-    if total_missing_concepts > 0:
+    if answered_count == 0 or total_words_spoken == 0:
         recommendations.append(
-            f"Review the {total_missing_concepts} missed concept keywords identified across questions to expand technical depth."
+            "Check that your microphone is unmuted and browser microphone permissions are enabled."
         )
-    if total_fillers > 5:
         recommendations.append(
-            "Practice the 'pause-instead-of-filler' technique: take a silent breath instead of saying 'um' or 'like'."
+            "Practice speaking your answers aloud for at least 30-60 seconds so the AI speech evaluator can measure relevance and technical terminology."
         )
-    if avg_face_centering is not None and avg_face_centering < 65.0:
+    else:
+        if total_missing_concepts > 0:
+            recommendations.append(
+                f"Review the {total_missing_concepts} missed concept keywords identified across questions to expand technical depth."
+            )
+        if total_fillers > 5:
+            recommendations.append(
+                "Practice the 'pause-instead-of-filler' technique: take a silent breath instead of saying 'um' or 'like'."
+            )
+        if avg_face_centering is not None and avg_face_centering < 65.0:
+            recommendations.append(
+                "Position your webcam at eye level approximately 2-3 feet away so your face stays in the center 50% framing zone."
+            )
         recommendations.append(
-            "Position your webcam at eye level approximately 2-3 feet away so your face stays in the center 50% framing zone."
+            "Leverage the adaptive follow-up prompts to practice defending technical trade-offs under probing questions."
         )
-    recommendations.append(
-        "Leverage the adaptive follow-up prompts to practice defending technical trade-offs under probing questions."
-    )
 
     # 7. Build Per-Question Breakdown
     breakdown: List[QuestionReportItem] = []
