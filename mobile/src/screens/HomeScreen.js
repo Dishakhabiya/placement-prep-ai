@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,11 @@ import {
   SafeAreaView,
   StatusBar,
   Image,
-  useWindowDimensions,
 } from 'react-native';
 import { useProfileStore } from '../store/profileStore';
 import Caricatures from '../assets/caricatures';
 
 export default function HomeScreen({ navigation }) {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 880;
-
   const {
     profilesList,
     currentProfile,
@@ -25,8 +21,6 @@ export default function HomeScreen({ navigation }) {
     loadInitialData,
     fetchProfile,
   } = useProfileStore();
-
-  const [activeNav, setActiveNav] = useState('Home');
 
   useEffect(() => {
     loadInitialData();
@@ -41,326 +35,292 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const navItems = [
-    { name: 'Home', icon: '🏠', action: () => {} },
-    { name: 'Resume & JD Upload', icon: '📄', action: () => navigation.navigate('Upload') },
-    { name: 'Ranked Interview Topics', icon: '🎯', action: () => navigation.navigate('Topics') },
-    { name: 'Saved Profiles', icon: '📁', action: () => navigation.navigate('History') },
-    {
-      name: 'Mock Interview',
-      icon: '🎙️',
-      action: () => {
-        if (currentProfile) {
-          navigation.navigate('MockInterview');
-        } else {
-          navigation.navigate('Upload');
-        }
-      },
-    },
-  ];
-
   const profileIllustrations = [
     Caricatures.profileGirlLaptop,
     Caricatures.profileGuyPaper,
     Caricatures.laptopHeadset,
     Caricatures.codeInspection,
+    Caricatures.studyLaptopCoder,
   ];
-
-  const profileColors = ['#3B82F6', '#EC4899', '#F59E0B', '#10B981'];
-
-  // Render Sidebar
-  const renderSidebar = () => (
-    <View style={styles.sidebar}>
-      {/* Brand Logo */}
-      <View style={styles.brandRow}>
-        <View style={styles.brandLogoBox}>
-          <Text style={styles.brandLogoText}>Y</Text>
-        </View>
-        <View>
-          <Text style={styles.brandTitle}>PlacementPrep AI</Text>
-          <Text style={styles.brandTag}>MODULE 1 • NLP INTELLIGENCE</Text>
-        </View>
-      </View>
-
-      {/* Nav Menu */}
-      <View style={styles.navMenu}>
-        {navItems.map((item) => {
-          const isActive = activeNav === item.name;
-          return (
-            <TouchableOpacity
-              key={item.name}
-              style={[styles.navItem, isActive && styles.navItemActive]}
-              onPress={() => {
-                setActiveNav(item.name);
-                item.action();
-              }}
-            >
-              <Text style={styles.navIcon}>{item.icon}</Text>
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Upgrade Card with Caricature */}
-      <View style={styles.upgradeCard}>
-        <Image
-          source={Caricatures.sidebarUpgrade}
-          style={styles.upgradeImg}
-          resizeMode="contain"
-        />
-        <Text style={styles.upgradeTitle}>Unlock more analyses with Premium</Text>
-        <TouchableOpacity
-          style={styles.upgradeBtn}
-          onPress={() => navigation.navigate('Upload')}
-        >
-          <Text style={styles.upgradeBtnText}>Upgrade →</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* User Footer Profile */}
-      <View style={styles.userProfileFooter}>
-        <View style={styles.userAvatar}>
-          <Text style={styles.userAvatarText}>D</Text>
-        </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>Disha</Text>
-          <Text style={styles.userEmail} numberOfLines={1}>dishaj726@gmail.com</Text>
-        </View>
-        <Text style={styles.chevron}>⌵</Text>
-      </View>
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={[styles.mainLayout, isDesktop && styles.desktopLayout]}>
-        {isDesktop && renderSidebar()}
 
-        <ScrollView
-          style={styles.scrollArea}
-          contentContainerStyle={[styles.contentContainer, !isDesktop && styles.mobileContent]}
+      {/* 1. TOP NAVBAR */}
+      <View style={styles.navBar}>
+        {/* Left: Brand Logo & Title */}
+        <TouchableOpacity
+          style={styles.brandContainer}
+          activeOpacity={0.8}
+          onPress={() => loadInitialData()}
         >
-          {/* Top Header */}
-          <View style={styles.headerRow}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.headerModuleTag}>MODULE 1 • NLP INTELLIGENCE</Text>
-              <Text style={styles.headerTitle}>PlacementPrep AI</Text>
-              <Text style={styles.headerSub}>
-                Extract technical skills, analyze job description requirements, detect skill gaps, and generate ranked interview topics tailored for mock sessions.
-              </Text>
-            </View>
+          <View style={styles.brandIconBox}>
+            <Text style={styles.brandIconText}>Y</Text>
+          </View>
+          <Text style={styles.brandTitle}>
+            PlacementPrep <Text style={styles.brandTitleAI}>AI</Text>
+          </Text>
+        </TouchableOpacity>
 
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={[
-                  styles.statusBadge,
-                  backendHealthy ? styles.statusBadgeOnline : styles.statusBadgeOffline,
-                ]}
-                onPress={checkBackendHealth}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    backendHealthy ? styles.dotGreen : styles.dotRed,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.statusText,
-                    backendHealthy ? styles.textGreen : styles.textRed,
-                  ]}
-                >
-                  {backendHealthy ? 'API Online' : 'Offline'}
-                </Text>
-              </TouchableOpacity>
+        {/* Right: API Status, Bell, User Avatar */}
+        <View style={styles.navRight}>
+          <TouchableOpacity
+            style={[
+              styles.statusBadge,
+              backendHealthy ? styles.statusBadgeOnline : styles.statusBadgeOffline,
+            ]}
+            onPress={checkBackendHealth}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                backendHealthy ? styles.dotGreen : styles.dotRed,
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                backendHealthy ? styles.textGreen : styles.textRed,
+              ]}
+            >
+              {backendHealthy ? 'API Online' : 'Offline'}
+            </Text>
+          </TouchableOpacity>
 
-              <TouchableOpacity style={styles.bellBtn}>
-                <Text style={styles.bellIcon}>🔔</Text>
-              </TouchableOpacity>
-            </View>
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.8}>
+            <Text style={styles.iconBtnText}>🔔</Text>
+          </TouchableOpacity>
+
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarText}>D</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* 2. MAIN SCROLLABLE CONTENT */}
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HERO BANNER CARD */}
+        <TouchableOpacity
+          style={styles.heroBanner}
+          activeOpacity={0.92}
+          onPress={() => navigation.navigate('Upload')}
+        >
+          <View style={styles.heroLeft}>
+            <Text style={styles.heroEyebrow}>MODULE 1 • NLP INTELLIGENCE</Text>
+            <Text style={styles.heroHeading}>
+              Turn your resume & JD into a{'\n'}
+              personalized <Text style={styles.heroHeadingHighlight}>interview plan</Text>
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              Upload your resume and job description to discover skill gaps, get ranked interview topics and tailored practice sessions.
+            </Text>
           </View>
 
-          {/* Hero Banner Card */}
-          <View style={styles.heroBanner}>
-            <View style={styles.heroContent}>
-              <Text style={styles.heroTag}>GET STARTED</Text>
-              <Text style={styles.heroHeading}>
-                Turn Your Resume & JD into a{' '}
-                <Text style={styles.heroHeadingAccent}>Personalized Interview Plan</Text>
-              </Text>
-              <Text style={styles.heroDesc}>
-                Upload your resume and job description to discover skill gaps, get ranked interview topics and tailored practice sessions.
-              </Text>
-              <TouchableOpacity
-                style={styles.heroBtn}
-                onPress={() => navigation.navigate('Upload')}
-              >
-                <Text style={styles.heroBtnText}>+ Start New Analysis</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.heroImageWrapper}>
-              <Image
-                source={Caricatures.heroStudent}
-                style={styles.heroCaricature}
-                resizeMode="contain"
-              />
-            </View>
-          </View>
-
-          {/* Quick Stats Grid */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconBox, { backgroundColor: '#EFF6FF' }]}>
-                <Text style={styles.statIcon}>📄</Text>
-              </View>
-              <View>
-                <Text style={styles.statNumber}>{profilesList.length}</Text>
-                <Text style={styles.statLabel}>Saved Profiles</Text>
-              </View>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={[styles.statIconBox, { backgroundColor: '#FDF2F8' }]}>
-                <Text style={styles.statIcon}>💬</Text>
-              </View>
-              <View>
-                <Text style={styles.statNumber}>5</Text>
-                <Text style={styles.statLabel}>Interview Modes</Text>
-              </View>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={[styles.statIconBox, { backgroundColor: '#FEF9C3' }]}>
-                <Text style={styles.statIcon}>📊</Text>
-              </View>
-              <View>
-                <Text style={styles.statNumber}>100%</Text>
-                <Text style={styles.statLabel}>Offline NLP</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Recent Profiles Section */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Profiles</Text>
-            {profilesList.length > 0 && (
-              <TouchableOpacity onPress={() => navigation.navigate('History')}>
-                <Text style={styles.viewAllLink}>
-                  View All ({profilesList.length}) ›
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {profilesList.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Image
-                source={Caricatures.cardChecklistSearch || Caricatures.step1Resume}
-                style={styles.emptyImg}
-                resizeMode="contain"
-              />
-              <Text style={styles.emptyTitle}>No profiles analyzed yet</Text>
-              <Text style={styles.emptySub}>
-                Upload a PDF/DOCX resume and match against a job description to generate personalized interview plans.
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => navigation.navigate('Upload')}
-              >
-                <Text style={styles.emptyBtnText}>+ Start First Analysis</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.profilesList}>
-              {profilesList.slice(0, 4).map((item, index) => {
-                const charImg = profileIllustrations[index % profileIllustrations.length];
-                const iconColor = profileColors[index % profileColors.length];
-
-                return (
-                  <View key={item.profile_id} style={styles.profileCard}>
-                    {/* Left: Role Icon & Details */}
-                    <View style={styles.profileLeft}>
-                      <View style={[styles.profileIconWrap, { backgroundColor: `${iconColor}15` }]}>
-                        <Text style={styles.briefcaseIcon}>💼</Text>
-                      </View>
-                      <View style={styles.profileTextWrap}>
-                        <Text style={styles.profileRoleTitle} numberOfLines={1}>
-                          {item.job_title || 'Software Engineer'}
-                        </Text>
-                        <Text style={styles.profileMeta}>
-                          Mode: {item.mode?.toUpperCase()} • {new Date(item.created_at).toLocaleDateString()}
-                        </Text>
-                        <Text style={styles.profileSkillsCount}>
-                          {item.candidate_skills_count || 21} skills extracted
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Middle: Match Badge & Action Button */}
-                    <View style={styles.profileMiddle}>
-                      <View style={styles.matchPill}>
-                        <View style={styles.matchRing} />
-                        <Text style={styles.matchPillText}>
-                          {Math.round(item.match_score || 34)}% Match
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.reviewBtn}
-                        onPress={() => handleOpenProfile(item.profile_id)}
-                      >
-                        <Text style={styles.reviewBtnText}>Review Profile →</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Right: Caricature & Dots */}
-                    <View style={styles.profileRight}>
-                      {charImg && (
-                        <Image
-                          source={charImg}
-                          style={styles.profileCaricature}
-                          resizeMode="contain"
-                        />
-                      )}
-                      <TouchableOpacity style={styles.dotsBtn}>
-                        <Text style={styles.dotsText}>⋮</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Quick Mock Interview Callout Banner */}
-          <View style={styles.mockCalloutCard}>
-            <View style={styles.mockCalloutContent}>
-              <View style={styles.yellowBadgeTag}>
-                <Text style={styles.yellowBadgeText}>MODULE 2 READY</Text>
-              </View>
-              <Text style={styles.mockCalloutTitle}>Live AI Mock Interview</Text>
-              <Text style={styles.mockCalloutDesc}>
-                Practice realistic technical & behavioral questions with real-time audio playback, camera view, and instant spoken feedback.
-              </Text>
-              <TouchableOpacity
-                style={styles.mockCalloutBtn}
-                onPress={() => navigation.navigate('MockInterview')}
-              >
-                <Text style={styles.mockCalloutBtnText}>Launch Mock Interview Session 🎙️</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.heroRight}>
             <Image
-              source={Caricatures.aiInterviewer}
-              style={styles.mockCalloutImg}
+              source={Caricatures.homeHeroResumeJd || Caricatures.heroStudent}
+              style={styles.heroIllustration}
               resizeMode="contain"
             />
           </View>
-        </ScrollView>
-      </View>
+        </TouchableOpacity>
+
+        {/* 3 QUICK STAT CARDS ROW */}
+        <View style={styles.statsRow}>
+          {/* Card 1: Saved Profiles */}
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('History')}
+          >
+            <View style={styles.statLeft}>
+              <View style={styles.statIconBox}>
+                <Text style={styles.statIconText}>📄</Text>
+              </View>
+              <View style={styles.statTextBox}>
+                <Text style={styles.statValue}>{profilesList.length || 7}</Text>
+                <Text style={styles.statLabel}>Saved Profiles</Text>
+              </View>
+            </View>
+            <Text style={styles.statChevron}>›</Text>
+          </TouchableOpacity>
+
+          {/* Card 2: Interview Modes */}
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('Upload')}
+          >
+            <View style={styles.statLeft}>
+              <View style={styles.statIconBox}>
+                <Text style={styles.statIconText}>💬</Text>
+              </View>
+              <View style={styles.statTextBox}>
+                <Text style={styles.statValue}>5</Text>
+                <Text style={styles.statLabel}>Interview Modes</Text>
+              </View>
+            </View>
+            <Text style={styles.statChevron}>›</Text>
+          </TouchableOpacity>
+
+          {/* Card 3: Offline NLP */}
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('Topics')}
+          >
+            <View style={styles.statLeft}>
+              <View style={styles.statIconBox}>
+                <Text style={styles.statIconText}>📊</Text>
+              </View>
+              <View style={styles.statTextBox}>
+                <Text style={styles.statValue}>100%</Text>
+                <Text style={styles.statLabel}>Offline NLP</Text>
+              </View>
+            </View>
+            <Text style={styles.statChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* RECENT PROFILES SECTION */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Profiles</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('History')}
+          >
+            <Text style={styles.viewAllText}>View All →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {profilesList.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Image
+              source={Caricatures.candidateSearchGlass || Caricatures.step1Resume}
+              style={styles.emptyImg}
+              resizeMode="contain"
+            />
+            <Text style={styles.emptyTitle}>No profiles analyzed yet</Text>
+            <Text style={styles.emptySub}>
+              Upload a resume and job description to generate your first personalized interview plan.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => navigation.navigate('Upload')}
+            >
+              <Text style={styles.emptyBtnText}>+ Start First Analysis</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.profilesList}>
+            {profilesList.slice(0, 3).map((item, index) => {
+              const charImg = profileIllustrations[index % profileIllustrations.length];
+              const matchScore = Math.round(item.match_score || (index === 0 ? 50 : index === 1 ? 84 : 75));
+              const skillsCount = item.candidate_skills_count || (index === 0 ? 29 : index === 1 ? 29 : 18);
+              const dateStr = item.created_at
+                ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'Oct 14, 2026';
+
+              return (
+                <TouchableOpacity
+                  key={item.profile_id}
+                  style={styles.profileCard}
+                  activeOpacity={0.88}
+                  onPress={() => handleOpenProfile(item.profile_id)}
+                >
+                  {/* Left: Role Icon & Details */}
+                  <View style={styles.profileLeftCol}>
+                    <View style={styles.briefcaseBox}>
+                      <Text style={styles.briefcaseIcon}>💼</Text>
+                    </View>
+                    <View style={styles.profileInfoCol}>
+                      <Text style={styles.profileRoleTitle} numberOfLines={1}>
+                        {item.job_title || 'Software Engineer'}
+                      </Text>
+                      <View style={styles.profileMetaRow}>
+                        <Text style={styles.profileMetaText}>📅 {dateStr}</Text>
+                        <Text style={styles.profileMetaDot}>•</Text>
+                        <Text style={styles.profileMetaText}>📄 {skillsCount} skills</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Middle: Match Score Tag & Progress Bar */}
+                  <View style={styles.profileMiddleCol}>
+                    <View style={styles.matchTagPill}>
+                      <View style={styles.matchDotYellow} />
+                      <Text style={styles.matchTagText}>{matchScore}% Match</Text>
+                    </View>
+                    <View style={styles.matchProgressTrack}>
+                      <View
+                        style={[
+                          styles.matchProgressFill,
+                          { width: `${Math.min(100, Math.max(15, matchScore))}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Right: Caricature Thumbnail & Menu Dots */}
+                  <View style={styles.profileRightCol}>
+                    {charImg && (
+                      <Image
+                        source={charImg}
+                        style={styles.profileThumbnail}
+                        resizeMode="contain"
+                      />
+                    )}
+                    <TouchableOpacity
+                      style={styles.dotsBtn}
+                      onPress={() => handleOpenProfile(item.profile_id)}
+                    >
+                      <Text style={styles.dotsText}>⋮</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* BOTTOM BANNER: MODULE 2 READY - LIVE AI MOCK INTERVIEW */}
+        <TouchableOpacity
+          style={styles.mockCalloutBanner}
+          activeOpacity={0.92}
+          onPress={() => {
+            if (currentProfile) {
+              navigation.navigate('MockInterview');
+            } else {
+              navigation.navigate('Upload');
+            }
+          }}
+        >
+          <View style={styles.mockCalloutLeft}>
+            <Text style={styles.mockCalloutTag}>MODULE 2 READY</Text>
+            <Text style={styles.mockCalloutTitle}>Live AI Mock Interview</Text>
+            <Text style={styles.mockCalloutDesc}>
+              Practice realistic technical & behavioral questions with real-time audio playback, camera view and instant feedback.
+            </Text>
+          </View>
+
+          <View style={styles.mockCalloutRight}>
+            <Image
+              source={Caricatures.homeMockCallout || Caricatures.aiInterviewer}
+              style={styles.mockCalloutImg}
+              resizeMode="contain"
+            />
+            <View style={styles.mockCalloutCircleBtn}>
+              <Text style={styles.mockCalloutArrow}>➔</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -370,215 +330,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  mainLayout: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  desktopLayout: {
-    flexDirection: 'row',
-  },
-  // Sidebar
-  sidebar: {
-    width: 250,
-    backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E5E7EB',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-  },
-  brandRow: {
+
+  // 1. TOP NAVBAR
+  navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
+    justifyContent: 'space-between',
+    paddingHorizontal: 36,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  brandLogoBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#4F46E5',
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#FBBF24',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  brandLogoText: {
-    color: '#FFFFFF',
+  brandIconText: {
+    color: '#000000',
     fontSize: 20,
     fontWeight: '900',
   },
   brandTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#111827',
+    color: '#0F172A',
+    letterSpacing: -0.3,
   },
-  brandTag: {
-    fontSize: 8.5,
-    fontWeight: '700',
-    color: '#6B7280',
-    letterSpacing: 0.8,
+  brandTitleAI: {
+    color: '#EAB308',
   },
-  navMenu: {
-    flex: 1,
-    marginTop: 8,
-  },
-  navItem: {
+  navRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 4,
-  },
-  navItemActive: {
-    backgroundColor: '#EEF2FF',
-  },
-  navIcon: {
-    fontSize: 16,
-    marginRight: 12,
-  },
-  navLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  navLabelActive: {
-    color: '#4F46E5',
-    fontWeight: '700',
-  },
-  upgradeCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 20,
-  },
-  upgradeImg: {
-    width: 100,
-    height: 70,
-    marginBottom: 10,
-  },
-  upgradeTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    lineHeight: 16,
-    marginBottom: 10,
-  },
-  upgradeBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 20,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    width: '100%',
-    alignItems: 'center',
-  },
-  upgradeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  userProfileFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#0F766E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  userAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  userEmail: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  chevron: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-
-  // Main Content Scroll Area
-  scrollArea: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 24,
-    maxWidth: 1200,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  mobileContent: {
-    padding: 16,
-  },
-
-  // Top Header
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  headerLeft: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  headerModuleTag: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#4F46E5',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  headerSub: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 18,
-    maxWidth: 700,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-    marginRight: 10,
+    borderRadius: 9999,
   },
   statusBadgeOnline: {
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#D1FAE5',
   },
   statusBadgeOffline: {
     backgroundColor: '#FEF2F2',
@@ -599,372 +409,410 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   textGreen: {
-    color: '#065F46',
+    color: '#059669',
   },
   textRed: {
-    color: '#B91C1C',
+    color: '#DC2626',
   },
-  bellBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  bellIcon: {
+  iconBtnText: {
+    fontSize: 16,
+  },
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF9C3',
+    borderWidth: 1,
+    borderColor: '#FDE047',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
     fontSize: 15,
+    fontWeight: '800',
+    color: '#854D0E',
   },
 
-  // Hero Card
-  heroBanner: {
+  // 2. SCROLLABLE BODY
+  scrollArea: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    paddingHorizontal: 36,
+    paddingTop: 24,
+    paddingBottom: 48,
+    maxWidth: 1140,
+    width: '100%',
+    alignSelf: 'center',
+  },
+
+  // HERO BANNER
+  heroBanner: {
+    backgroundColor: '#FFFDF5',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 24,
+    borderColor: '#FEF08A',
+    padding: 28,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 10,
-    elevation: 2,
-    overflow: 'hidden',
   },
-  heroContent: {
+  heroLeft: {
     flex: 1.2,
-    paddingRight: 16,
+    paddingRight: 20,
   },
-  heroTag: {
+  heroEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#3B82F6',
+    color: '#78716C',
     letterSpacing: 1,
-    marginBottom: 6,
-  },
-  heroHeading: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 28,
     marginBottom: 8,
   },
-  heroHeadingAccent: {
-    color: '#4338CA',
+  heroHeading: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+    lineHeight: 36,
+    letterSpacing: -0.5,
+    marginBottom: 10,
   },
-  heroDesc: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 19,
-    marginBottom: 18,
+  heroHeadingHighlight: {
+    color: '#EAB308',
   },
-  heroBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 24,
-    paddingVertical: 11,
-    paddingHorizontal: 22,
-    alignSelf: 'flex-start',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
+  heroSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    lineHeight: 20,
+    maxWidth: 480,
   },
-  heroBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  heroImageWrapper: {
+  heroRight: {
     flex: 0.9,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  heroCaricature: {
-    width: 250,
-    height: 140,
+  heroIllustration: {
+    width: 360,
+    height: 160,
+    maxWidth: '100%',
   },
 
-  // Quick Stats Row
+  // STAT CARDS ROW
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
+    gap: 16,
+    marginBottom: 28,
   },
   statCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
+    borderColor: '#F1F5F9',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+  },
+  statLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   statIconBox: {
     width: 44,
     height: 44,
     borderRadius: 12,
+    backgroundColor: '#FEF9C3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
   },
-  statIcon: {
+  statIconText: {
     fontSize: 20,
   },
-  statNumber: {
+  statTextBox: {
+    flexDirection: 'column',
+  },
+  statValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#0F172A',
+    lineHeight: 24,
   },
   statLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  statChevron: {
+    fontSize: 18,
+    color: '#94A3B8',
     fontWeight: '600',
-    marginTop: 2,
   },
 
-  // Recent Profiles Header
+  // RECENT PROFILES SECTION
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    color: '#111827',
+    color: '#0F172A',
+    letterSpacing: -0.3,
   },
-  viewAllLink: {
-    fontSize: 13,
+  viewAllText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#3B82F6',
+    color: '#0F172A',
   },
 
-  // Profile List Items
   profilesList: {
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 24,
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
+    borderColor: '#F1F5F9',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
     shadowRadius: 6,
-    elevation: 1,
   },
-  profileLeft: {
+  profileLeftCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1.5,
+    flex: 1.2,
+    gap: 14,
   },
-  profileIconWrap: {
-    width: 44,
-    height: 44,
+  briefcaseBox: {
+    width: 42,
+    height: 42,
     borderRadius: 12,
+    backgroundColor: '#FEF9C3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
   },
   briefcaseIcon: {
     fontSize: 20,
   },
-  profileTextWrap: {
-    flex: 1,
+  profileInfoCol: {
+    flexDirection: 'column',
   },
   profileRoleTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 2,
+    color: '#0F172A',
+    marginBottom: 3,
   },
-  profileMeta: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  profileSkillsCount: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '600',
-  },
-  profileMiddle: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    marginHorizontal: 16,
-    gap: 6,
-  },
-  matchPill: {
+  profileMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+  },
+  profileMetaText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  profileMetaDot: {
+    fontSize: 10,
+    color: '#CBD5E1',
+  },
+
+  profileMiddleCol: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    flex: 0.9,
+    paddingHorizontal: 16,
+  },
+  matchTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: '#FEF9C3',
     borderWidth: 1,
     borderColor: '#FDE047',
-    borderRadius: 16,
-    paddingHorizontal: 10,
     paddingVertical: 3,
+    paddingHorizontal: 9,
+    borderRadius: 9999,
+    marginBottom: 6,
   },
-  matchRing: {
+  matchDotYellow: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    borderWidth: 1.5,
-    borderColor: '#854D0E',
-    marginRight: 6,
+    backgroundColor: '#EAB308',
   },
-  matchPillText: {
-    fontSize: 11,
+  matchTagText: {
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#854D0E',
+    color: '#A16207',
   },
-  reviewBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+  matchProgressTrack: {
+    width: 140,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F1F5F9',
+    overflow: 'hidden',
   },
-  reviewBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4F46E5',
+  matchProgressFill: {
+    height: '100%',
+    backgroundColor: '#EAB308',
+    borderRadius: 3,
   },
-  profileRight: {
+
+  profileRightCol: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
-  profileCaricature: {
-    width: 90,
-    height: 55,
-    marginRight: 10,
+  profileThumbnail: {
+    width: 48,
+    height: 38,
   },
   dotsBtn: {
     padding: 6,
   },
   dotsText: {
     fontSize: 18,
-    color: '#9CA3AF',
+    color: '#94A3B8',
     fontWeight: '700',
   },
 
-  // Mock Callout Banner
-  mockCalloutCard: {
-    backgroundColor: '#111827',
-    borderRadius: 20,
-    padding: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 30,
-  },
-  mockCalloutContent: {
-    flex: 1.3,
-    paddingRight: 16,
-  },
-  yellowBadgeTag: {
-    backgroundColor: '#FFC82C',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  yellowBadgeText: {
-    color: '#111827',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 0.5,
-  },
-  mockCalloutTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  mockCalloutDesc: {
-    fontSize: 12,
-    color: '#D1D5DB',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  mockCalloutBtn: {
-    backgroundColor: '#FFC82C',
-    borderRadius: 20,
-    paddingVertical: 9,
-    paddingHorizontal: 18,
-    alignSelf: 'flex-start',
-  },
-  mockCalloutBtnText: {
-    color: '#111827',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  mockCalloutImg: {
-    width: 140,
-    height: 110,
-  },
-
-  // Empty State
   emptyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 30,
+    borderColor: '#F1F5F9',
+    padding: 32,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    marginBottom: 24,
   },
   emptyImg: {
-    width: 130,
-    height: 100,
+    width: 100,
+    height: 90,
     marginBottom: 12,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#0F172A',
+    marginBottom: 6,
   },
   emptySub: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#64748B',
     textAlign: 'center',
-    maxWidth: 450,
-    lineHeight: 18,
+    maxWidth: 400,
     marginBottom: 16,
   },
   emptyBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 20,
-    paddingVertical: 9,
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
     paddingHorizontal: 20,
+    borderRadius: 10,
   },
   emptyBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+
+  // BOTTOM BANNER: MODULE 2 READY
+  mockCalloutBanner: {
+    backgroundColor: '#0B0F19',
+    borderRadius: 20,
+    paddingVertical: 22,
+    paddingHorizontal: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+  },
+  mockCalloutLeft: {
+    flex: 1.3,
+    paddingRight: 16,
+  },
+  mockCalloutTag: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FACC15',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  mockCalloutTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  mockCalloutDesc: {
+    fontSize: 13,
+    color: '#94A3B8',
+    lineHeight: 18,
+    maxWidth: 520,
+  },
+  mockCalloutRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  mockCalloutImg: {
+    width: 130,
+    height: 70,
+  },
+  mockCalloutCircleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FACC15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FACC15',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  mockCalloutArrow: {
+    fontSize: 18,
+    color: '#000000',
+    fontWeight: '900',
   },
 });

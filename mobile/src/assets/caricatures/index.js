@@ -40,6 +40,8 @@ export const Caricatures = {
   // Completed Interview Celebration
   completedCelebration: require('./completed_celebration.png'),
   completedCelebrationTransparent: require('./completed_celebration_transparent.png'),
+  homeHeroResumeJd: require('./home_hero_resume_jd.png'),
+  homeMockCallout: require('./home_mock_callout.png'),
 };
 
 export default Caricatures;
