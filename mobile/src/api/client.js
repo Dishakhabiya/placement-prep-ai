@@ -287,5 +287,28 @@ export const apiClient = {
       answerText: params.answerText || params.answer_text,
     });
   },
+
+  /**
+   * Sends a base64 JPEG frame for AI visual analysis:
+   * detects posture, attire, eye contact and background distractions.
+   * @param {string} imageBase64 - raw base64 JPEG string (no data: prefix)
+   * @returns {{ posture, attire, eye_contact, background, overall_alert, alert_message, confidence, error }}
+   */
+  async analyzeInterviewFrame(imageBase64) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/answers/analyze-frame`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: imageBase64, mime_type: 'image/jpeg' }),
+      }, 10000);
+      const data = await res.json();
+      if (!res.ok) return { overall_alert: false, alert_message: '', error: data.detail || 'Frame analysis failed' };
+      return data;
+    } catch (e) {
+      return { overall_alert: false, alert_message: '', error: e.message };
+    }
+  },
 };
+
+
 

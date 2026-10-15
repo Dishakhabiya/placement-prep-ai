@@ -7,6 +7,7 @@ from typing import List, Optional
 from fastapi.responses import Response
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from module4.ai_visual_analyzer import analyze_frame_with_gemini
 from sqlalchemy.orm import Session
 
 from db import get_db, ProfileRecord
@@ -313,6 +314,7 @@ def generate_session_report_endpoint(
         session_id=req.session_id,
         candidate_name=candidate_name or "Candidate",
         target_role=target_role or "Software Engineer",
+        visual_issues=req.visual_issues or [],
     )
     return report
 
@@ -322,6 +324,35 @@ class TtsRequest(BaseModel):
     voice: Optional[str] = "en-US-JennyNeural"
     rate: Optional[str] = "-3%"
     pitch: Optional[str] = "+0Hz"
+
+
+class FrameAnalysisRequest(BaseModel):
+    image_base64: str  # base64-encoded JPEG or PNG frame
+    mime_type: Optional[str] = "image/jpeg"
+
+
+@router.post(
+    "/analyze-frame",
+    summary="Analyze a live video frame for posture, attire, eye contact and background"
+)
+async def analyze_interview_frame(req: FrameAnalysisRequest):
+    """
+    Accepts a base64-encoded JPEG frame captured from the candidate's webcam.
+    Uses Gemini Vision to detect:
+      - Lying down / poor posture
+      - Informal attire
+      - Eye contact quality
+      - Extra people or cluttered background
+    Returns structured JSON with alert flag and coaching message.
+    """
+    if not req.image_base64 or len(req.image_base64) < 50:
+        raise HTTPException(status_code=422, detail="image_base64 is required and must be a valid base64 image.")
+
+    result = await analyze_frame_with_gemini(
+        image_base64=req.image_base64,
+        mime_type=req.mime_type or "image/jpeg",
+    )
+    return result
 
 
 @router.post(

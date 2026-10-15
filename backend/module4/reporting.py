@@ -16,6 +16,7 @@ def aggregate_session_report(
     session_id: Optional[str] = None,
     candidate_name: Optional[str] = "Candidate",
     target_role: Optional[str] = "Software Engineer",
+    visual_issues: Optional[List[Dict[str, Any]]] = None,
 ) -> SessionReportResponse:
     """
     Aggregates interview performance across all evaluated questions in a session.
@@ -203,6 +204,16 @@ def aggregate_session_report(
                 0.40 * avg_coverage +
                 0.20 * delivery_score
             )
+
+        # Apply behavioral penalties for visual violations (lying down, informal wear)
+        if visual_issues:
+            posture_violations = sum(1 for v in visual_issues if v.get("posture") == "lying_down")
+            if posture_violations > 0:
+                readiness = max(5.0, readiness - min(35.0, posture_violations * 15.0))
+            attire_violations = sum(1 for v in visual_issues if v.get("attire") == "informal")
+            if attire_violations > 0:
+                readiness = max(5.0, readiness - min(15.0, attire_violations * 5.0))
+
         overall_readiness = round(min(100.0, max(0.0, readiness)), 1)
     else:
         overall_readiness = 0.0
@@ -216,19 +227,21 @@ def aggregate_session_report(
 
     # 4. Generate Key Strengths
     strengths: List[str] = []
-    if answered_count > 0 and total_words_spoken > 0:
+    has_posture_issue = any(v.get("posture") == "lying_down" for v in (visual_issues or []))
+    if answered_count > 0 and total_words_spoken >= 15:
         if avg_relevance >= 70.0:
             strengths.append(f"High answer relevance ({avg_relevance}%), directly addressing interview questions.")
         if avg_coverage >= 70.0:
             strengths.append(f"Strong concept coverage ({avg_coverage}%), demonstrating solid domain terminology.")
-        if 110.0 <= avg_wpm <= 165.0 and total_words_spoken >= 15:
+        if 110.0 <= avg_wpm <= 165.0 and total_words_spoken >= 20:
             strengths.append(f"Optimal speaking pace ({avg_wpm} WPM), maintaining clear conversational rhythm.")
-        if overall_filler_pct <= 3.0 and total_words_spoken >= 15:
+        # Clean speech delivery only counts if content was substantive AND relevance is decent
+        if overall_filler_pct <= 3.0 and total_words_spoken >= 20 and avg_relevance >= 50.0:
             strengths.append(f"Clean speech delivery with very low filler usage ({overall_filler_pct}%).")
-        if avg_face_presence is not None and avg_face_presence >= 80.0:
+        if avg_face_presence is not None and avg_face_presence >= 80.0 and not has_posture_issue:
             strengths.append(f"Consistent camera framing presence ({avg_face_presence}%) throughout the session.")
-        if answered_count == total_q_count and total_q_count > 0:
-            strengths.append(f"Full session completion ({answered_count}/{total_q_count} questions answered).")
+        if answered_count == total_q_count and total_q_count > 0 and avg_relevance >= 45.0:
+            strengths.append(f"Full session completion ({answered_count}/{total_q_count} questions answered substantively).")
 
     # 5. Generate Areas for Improvement
     improvements: List[str] = []
@@ -270,6 +283,34 @@ def aggregate_session_report(
             improvements.append(
                 f"Completed {answered_count} of {total_q_count} questions. Practice answering all questions to simulate real interviews."
             )
+
+        # Visual monitoring alerts from real-time AI analysis
+        if visual_issues:
+            posture_issues = [v for v in visual_issues if v.get("posture") == "lying_down"]
+            attire_issues = [v for v in visual_issues if v.get("attire") == "informal"]
+            bg_issues = [v for v in visual_issues if v.get("background") == "extra_people"]
+            eye_issues = [v for v in visual_issues if v.get("eye_contact") == "poor"]
+
+            if posture_issues:
+                improvements.append(
+                    f"Posture concern detected {len(posture_issues)} time(s): You were observed lying down or with poor posture during the interview. "
+                    "Always sit upright in a dedicated interview space."
+                )
+            if attire_issues:
+                improvements.append(
+                    f"Attire concern detected {len(attire_issues)} time(s): Informal clothing was observed. "
+                    "Always dress in business casual or formal attire for interview practice."
+                )
+            if bg_issues:
+                improvements.append(
+                    f"Background concern: Other people were detected in your camera frame {len(bg_issues)} time(s). "
+                    "Conduct interviews in a private, distraction-free space."
+                )
+            if eye_issues:
+                improvements.append(
+                    f"Eye contact: Poor eye contact with the camera was detected {len(eye_issues)} time(s). "
+                    "Practice looking directly at the camera lens rather than your screen."
+                )
 
     # 6. Actionable Coaching Recommendations
     recommendations: List[str] = []

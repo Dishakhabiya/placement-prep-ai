@@ -37,7 +37,9 @@ export const Caricatures = {
   telescope: require('./card_telescope.png'),
   enterDoc: require('./card_enter_doc.png'),
   readingReceipt: require('./card_reading_receipt.png'),
-  phoneCall: require('./card_phone_call.png'),
+  // Completed Interview Celebration
+  completedCelebration: require('./completed_celebration.png'),
+  completedCelebrationTransparent: require('./completed_celebration_transparent.png'),
 };
 
 export default Caricatures;

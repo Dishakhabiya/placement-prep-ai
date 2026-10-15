@@ -24,6 +24,7 @@ export default function PerformanceReportScreen({ route, navigation }) {
   const questions = rawParams.questions || [];
   const profile = rawParams.profile || null;
   const sessionId = rawParams.sessionId || rawParams.session_id || null;
+  const visualIssues = rawParams.visualIssues || [];
 
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
@@ -99,6 +100,7 @@ export default function PerformanceReportScreen({ route, navigation }) {
           sessionId: sessionId || profile?.session_id,
           candidateName,
           targetRole,
+          visualIssues,
         });
         setReport(remoteReport);
       } catch (apiErr) {

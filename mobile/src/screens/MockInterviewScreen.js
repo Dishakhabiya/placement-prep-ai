@@ -76,6 +76,12 @@ export default function MockInterviewScreen({ navigation }) {
   // Session answers map
   const [sessionAnswers, setSessionAnswers] = useState({});
 
+  // Real-time visual analysis state
+  const [visualAlert, setVisualAlert] = useState(null); // { message, severity, type }
+  const [sessionVisualIssues, setSessionVisualIssues] = useState([]); // accumulated issues for final report
+  const frameAnalysisIntervalRef = useRef(null);
+  const canvasRef = useRef(null); // hidden canvas for frame capture
+
   // Browser MediaRecorder, stream, video element and timer references
   const mediaStreamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -102,6 +108,88 @@ export default function MockInterviewScreen({ navigation }) {
   const answerTimerIntervalRef = useRef(null);
   const feedbackTimeoutRef = useRef(null);
   const isFinalizingRef = useRef(false);
+
+  // Hidden canvas for video frame capture (injected into DOM)
+  const ensureCanvas = () => {
+    if (typeof document === 'undefined') return null;
+    if (!canvasRef.current) {
+      const c = document.createElement('canvas');
+      c.width = 320;
+      c.height = 240;
+      c.style.display = 'none';
+      c.id = 'ai-frame-capture-canvas';
+      document.body.appendChild(c);
+      canvasRef.current = c;
+    }
+    return canvasRef.current;
+  };
+
+  // Capture current video frame as base64 JPEG
+  const captureVideoFrame = () => {
+    if (isCameraOff || !videoElementRef.current || !hasVideoTrack) return null;
+    const videoEl = videoElementRef.current;
+    if (!videoEl.videoWidth || !videoEl.videoHeight) return null;
+    try {
+      const canvas = ensureCanvas();
+      if (!canvas) return null;
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      // Mirror to match displayed video (scaleX -1)
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(videoEl, -canvas.width, 0, canvas.width, canvas.height);
+      ctx.restore();
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      // Strip the data:image/jpeg;base64, prefix
+      return dataUrl.split(',')[1] || null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Run AI visual analysis on a captured frame
+  const runFrameAnalysis = async () => {
+    if (isCameraOff || !hasVideoTrack) return;
+    const base64Frame = captureVideoFrame();
+    if (!base64Frame) return;
+    try {
+      const result = await apiClient.analyzeInterviewFrame(base64Frame);
+      if (result && result.overall_alert && result.alert_message) {
+        const severity = result.posture === 'lying_down' ? 'critical' : 'warning';
+        setVisualAlert({ message: result.alert_message, severity, type: result.posture === 'lying_down' ? 'posture' : result.attire === 'informal' ? 'attire' : result.background === 'extra_people' ? 'background' : 'eye_contact' });
+        // Accumulate issue for final report
+        setSessionVisualIssues(prev => {
+          const isDupe = prev.some(p => p.type === (result.posture === 'lying_down' ? 'posture' : 'other') && Date.now() - p.ts < 30000);
+          if (isDupe) return prev;
+          return [...prev, { message: result.alert_message, severity, ts: Date.now(), posture: result.posture, attire: result.attire, eye_contact: result.eye_contact, background: result.background }];
+        });
+        // Auto-dismiss warning after 6 seconds
+        setTimeout(() => setVisualAlert(null), 6000);
+      }
+    } catch (e) {
+      // Silent — visual analysis is non-blocking
+    }
+  };
+
+  // Start periodic frame analysis during recording
+  const startFrameAnalysis = () => {
+    stopFrameAnalysis();
+    // First check after 3s, then every 8s
+    frameAnalysisIntervalRef.current = setInterval(() => {
+      runFrameAnalysis();
+    }, 8000);
+    // Run first check immediately after short delay
+    setTimeout(() => runFrameAnalysis(), 3000);
+  };
+
+  const stopFrameAnalysis = () => {
+    if (frameAnalysisIntervalRef.current) {
+      clearInterval(frameAnalysisIntervalRef.current);
+      frameAnalysisIntervalRef.current = null;
+    }
+    setVisualAlert(null);
+  };
 
   // Listen to browser fullscreen changes (e.g. user hits ESC)
   useEffect(() => {
@@ -235,6 +323,7 @@ export default function MockInterviewScreen({ navigation }) {
     countdownIntervalRef.current = null;
     answerTimerIntervalRef.current = null;
     feedbackTimeoutRef.current = null;
+    stopFrameAnalysis();
   };
 
   const cancelAudio = () => {
@@ -563,6 +652,9 @@ export default function MockInterviewScreen({ navigation }) {
     // Start live speech transcription overlay
     startSpeechRecognition();
 
+    // Start AI visual frame monitoring (posture, attire, eye contact, background)
+    startFrameAnalysis();
+
     // Start MediaRecorder if stream exists
     if (mediaStreamRef.current && typeof MediaRecorder !== 'undefined') {
       try {
@@ -761,21 +853,40 @@ export default function MockInterviewScreen({ navigation }) {
       }
     }
 
-    // Tier 3: Local fallback evaluation using genuine spoken words
+    // Tier 3: Local fallback evaluation — honest scoring based on actual spoken content
     if (!evalResult && answerText) {
       const words = candidateWords;
-      const estWpm = durationCaptured > 0 ? Math.round((words.length / durationCaptured) * 60) : 115;
+      const totalExpected = (currentQ.expected_key_concepts || []).length;
+      const estWpm = durationCaptured > 0 ? Math.round((words.length / durationCaptured) * 60) : 100;
+
+      // Compute honest relevance: compare spoken words against question keywords
+      const qWords = new Set(currentQ.question_text.toLowerCase().split(/\W+/).filter(w => w.length > 3));
+      const ansWordsSet = new Set(answerText.toLowerCase().split(/\W+/).filter(w => w.length > 3));
+      const overlap = [...qWords].filter(w => ansWordsSet.has(w)).length;
+      const rawRelevance = qWords.size > 0 ? (overlap / qWords.size) : 0;
+      // Scale: very few word matches => low score, good overlap => up to 70
+      const fallbackRelevance = Math.min(70, Math.round(rawRelevance * 100));
+
+      // Concept coverage: how many expected concepts appear in answer
+      const coveredConcepts = (currentQ.expected_key_concepts || []).filter(concept =>
+        answerText.toLowerCase().includes(concept.toLowerCase().split(' ')[0])
+      );
+      const missingConcepts = (currentQ.expected_key_concepts || []).filter(c => !coveredConcepts.includes(c));
+      const fallbackCoverage = totalExpected > 0 ? Math.round((coveredConcepts.length / totalExpected) * 100) : (words.length >= 20 ? 40 : 15);
+
       evalResult = {
         question_id: answerId,
         question_text: currentQ.question_text,
         relevance: {
-          relevance_score: 65,
-          reasoning: 'Candidate responded to the interview question.',
+          relevance_score: Math.max(5, fallbackRelevance),
+          reasoning: fallbackRelevance < 25
+            ? 'Answer appears largely off-topic or too vague to assess relevance.'
+            : 'Candidate addressed some aspects of the question.',
         },
         concept_coverage: {
-          coverage_score: 50,
-          covered_concepts: [],
-          missing_concepts: currentQ.expected_key_concepts || [],
+          coverage_score: Math.max(0, fallbackCoverage),
+          covered_concepts: coveredConcepts,
+          missing_concepts: missingConcepts,
         },
         transcript_metadata: {
           transcript: answerText,
@@ -783,8 +894,8 @@ export default function MockInterviewScreen({ navigation }) {
           duration_seconds: durationCaptured,
         },
         delivery_metrics: {
-          words_per_minute: Math.max(estWpm, 80),
-          pace_rating: 'Optimal',
+          words_per_minute: Math.max(estWpm, 30),
+          pace_rating: estWpm < 80 ? 'Too Slow' : estWpm > 170 ? 'Too Fast' : 'Optimal',
           total_filler_words: 0,
           filler_percentage: 0.0,
           extended_pause_count: 0,
@@ -987,6 +1098,7 @@ export default function MockInterviewScreen({ navigation }) {
       questions: questions,
       profile: currentProfile,
       sessionId: `mock_session_${Date.now()}`,
+      visualIssues: sessionVisualIssues, // AI visual monitoring alerts
     });
   };
 
@@ -1141,27 +1253,403 @@ export default function MockInterviewScreen({ navigation }) {
     );
   }
 
-  // PHASE: COMPLETED
+  // PHASE: COMPLETED (Redesigned with celebration caricature)
   if (interviewPhase === 'completed') {
-    return (
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.completedContainer}>
-            <Text style={styles.completedEmoji}>🎉</Text>
-            <Text style={styles.completedTitle}>Mock Interview Concluded</Text>
-            <Text style={styles.completedSub}>
-              You answered {answeredCount} of {totalCount} questions.
-              {answeredCount < totalCount
-                ? ` The remaining ${totalCount - answeredCount} questions were skipped.`
-                : ' All questions completed successfully!'}
-            </Text>
+    const skippedCount = Math.max(0, totalCount - answeredCount);
+    const candidateInitial = (currentProfile?.full_name || currentProfile?.candidate_name || 'D').charAt(0).toUpperCase();
 
-            <TouchableOpacity style={styles.viewReportBtn} onPress={handleNavigateToReport}>
-              <Text style={styles.viewReportBtnText}>📊 View Performance Report & Analytics</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+    return (
+      <div style={{
+        minHeight: '100vh',
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Background decorative corner blobs and confetti doodles */}
+        {/* Bottom Left Pastel Yellow Shape + doodle line */}
+        <div style={{
+          position: 'absolute',
+          bottom: -40,
+          left: -40,
+          width: 280,
+          height: 280,
+          borderRadius: '45% 55% 60% 40% / 50% 60% 40% 50%',
+          backgroundColor: '#FEF9C3',
+          opacity: 0.65,
+          zIndex: 1,
+          pointerEvents: 'none',
+        }} />
+        <svg style={{
+          position: 'absolute',
+          bottom: 25,
+          left: 15,
+          width: 140,
+          height: 90,
+          zIndex: 2,
+          pointerEvents: 'none',
+        }} viewBox="0 0 140 90" fill="none">
+          <path d="M10,80 Q40,20 70,60 T130,40" stroke="#0F172A" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+        </svg>
+
+        {/* Bottom Right Pastel Purple/Lavender Shape + doodle line */}
+        <div style={{
+          position: 'absolute',
+          bottom: -50,
+          right: -50,
+          width: 300,
+          height: 300,
+          borderRadius: '50% 50% 40% 60% / 60% 40% 60% 40%',
+          backgroundColor: '#EEF2FF',
+          opacity: 0.8,
+          zIndex: 1,
+          pointerEvents: 'none',
+        }} />
+        <svg style={{
+          position: 'absolute',
+          bottom: 30,
+          right: 20,
+          width: 140,
+          height: 90,
+          zIndex: 2,
+          pointerEvents: 'none',
+        }} viewBox="0 0 140 90" fill="none">
+          <path d="M15,50 Q60,85 95,45 T135,70" stroke="#0F172A" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+        </svg>
+
+        {/* Scattered Confetti Accents */}
+        <div style={{
+          position: 'absolute', top: 120, left: '12%', width: 8, height: 16,
+          backgroundColor: '#FEF08A', borderRadius: 4, transform: 'rotate(25deg)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', top: 220, left: '8%', width: 14, height: 7,
+          backgroundColor: '#93C5FD', borderRadius: 4, transform: 'rotate(-40deg)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', top: 160, right: '14%', width: 7, height: 14,
+          backgroundColor: '#FBCFE8', borderRadius: 4, transform: 'rotate(35deg)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', top: 260, right: '9%', width: 16, height: 7,
+          backgroundColor: '#818CF8', borderRadius: 4, transform: 'rotate(-30deg)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: 140, left: '6%', width: 14, height: 7,
+          backgroundColor: '#60A5FA', borderRadius: 4, transform: 'rotate(45deg)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: 130, right: '7%', width: 8, height: 16,
+          backgroundColor: '#F472B6', borderRadius: 4, transform: 'rotate(-20deg)', pointerEvents: 'none',
+        }} />
+
+        {/* 1. TOP NAVBAR */}
+        <header style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 36px',
+          backgroundColor: '#FFFFFF',
+          zIndex: 10,
+          position: 'relative',
+        }}>
+          {/* Logo brand */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              backgroundColor: '#EEF2FF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M4 4L12 14L20 4M12 14V21" stroke="#4F46E5" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <span style={{ fontSize: 19, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 }}>
+              PlacementPrep <span style={{ color: '#4F46E5' }}>AI</span>
+            </span>
+          </div>
+
+          {/* Right status & profile items */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* API Online Badge */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              backgroundColor: '#ECFDF5',
+              padding: '6px 14px',
+              borderRadius: 9999,
+              border: '1px solid #D1FAE5',
+            }}>
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: '#10B981',
+                boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)',
+              }} />
+              <span style={{ fontSize: 13, fontWeight: '600', color: '#059669' }}>
+                API Online
+              </span>
+            </div>
+
+            {/* Notification Bell */}
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#64748B',
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </div>
+
+            {/* User Avatar Circle */}
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              backgroundColor: '#EEF2FF',
+              border: '1px solid #C7D2FE',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#4F46E5',
+              fontSize: 15,
+              fontWeight: '800',
+              cursor: 'pointer',
+            }}>
+              {candidateInitial}
+            </div>
+          </div>
+        </header>
+
+        {/* 2. MAIN CENTER BODY */}
+        <main style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '12px 24px 36px 24px',
+          zIndex: 5,
+          position: 'relative',
+        }}>
+          {/* Caricature Illustration */}
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 6,
+          }}>
+            <Image
+              source={Caricatures.completedCelebration}
+              style={{
+                width: 480,
+                maxWidth: '92vw',
+                height: 210,
+              }}
+              resizeMode="contain"
+            />
+          </div>
+
+          {/* Heading with spark accents */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            marginTop: 4,
+          }}>
+            {/* Left yellow sparks */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M4 14L10 12M6 8L12 10" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+
+            <h1 style={{
+              margin: 0,
+              fontSize: 34,
+              fontWeight: '900',
+              color: '#0F172A',
+              letterSpacing: -0.6,
+            }}>
+              Mock Interview <span style={{ color: '#3B82F6' }}>Completed!</span>
+            </h1>
+
+            {/* Right yellow sparks */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M20 14L14 12M18 8L12 10" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {/* Subtitle */}
+          <div style={{ marginTop: 10, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 16, color: '#1E293B', fontWeight: '500' }}>
+              You answered <span style={{ color: '#3B82F6', fontWeight: '800' }}>{answeredCount}</span> of <span style={{ color: '#3B82F6', fontWeight: '800' }}>{totalCount}</span> questions.
+            </p>
+            <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#64748B', fontWeight: '400' }}>
+              {skippedCount > 0
+                ? `The remaining ${skippedCount} question${skippedCount === 1 ? ' was' : 's were'} skipped.`
+                : 'All questions were completed successfully!'}
+            </p>
+          </div>
+
+          {/* Stat Metric Card (Answered / Skipped / Total) */}
+          <div style={{
+            marginTop: 26,
+            marginBottom: 26,
+            width: '100%',
+            maxWidth: 640,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 18,
+            border: '1px solid #E2E8F0',
+            boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            padding: '18px 24px',
+          }}>
+            {/* 1. Answered */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, justifyContent: 'center' }}>
+              <div style={{
+                width: 46,
+                height: 46,
+                borderRadius: '50%',
+                backgroundColor: '#DCFCE7',
+                border: '1px solid #BBF7D0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 24, fontWeight: '800', color: '#0F172A', lineHeight: '28px' }}>
+                  {answeredCount}
+                </span>
+                <span style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }}>
+                  Answered
+                </span>
+              </div>
+            </div>
+
+            {/* Divider 1 */}
+            <div style={{ width: 1, height: 42, backgroundColor: '#E2E8F0' }} />
+
+            {/* 2. Skipped */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, justifyContent: 'center' }}>
+              <div style={{
+                width: 46,
+                height: 46,
+                borderRadius: '50%',
+                backgroundColor: '#FEE2E2',
+                border: '1px solid #FECACA',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 24, fontWeight: '800', color: '#0F172A', lineHeight: '28px' }}>
+                  {skippedCount}
+                </span>
+                <span style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }}>
+                  Skipped
+                </span>
+              </div>
+            </div>
+
+            {/* Divider 2 */}
+            <div style={{ width: 1, height: 42, backgroundColor: '#E2E8F0' }} />
+
+            {/* 3. Total Questions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, justifyContent: 'center' }}>
+              <div style={{
+                width: 46,
+                height: 46,
+                borderRadius: '50%',
+                backgroundColor: '#EFF6FF',
+                border: '1px solid #DBEAFE',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 24, fontWeight: '800', color: '#0F172A', lineHeight: '28px' }}>
+                  {totalCount}
+                </span>
+                <span style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }}>
+                  Total Questions
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action CTA Button */}
+          <button
+            onClick={handleNavigateToReport}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              backgroundColor: '#3B82F6',
+              backgroundImage: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+              color: '#FFFFFF',
+              fontSize: 16,
+              fontWeight: '700',
+              padding: '14px 38px',
+              borderRadius: 9999,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px -4px rgba(37, 99, 235, 0.4)',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 12px 28px -4px rgba(37, 99, 235, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 24px -4px rgba(37, 99, 235, 0.4)';
+            }}
+          >
+            <span>View Performance Report</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </button>
+        </main>
+      </div>
     );
   }
 
@@ -1274,7 +1762,53 @@ export default function MockInterviewScreen({ navigation }) {
         {/* 2. MAIN VIEW AREA (Video background is behind this) */}
         <View style={styles.imgVideoStageContainer}>
 
+          {/* ===== REAL-TIME AI VISUAL ALERT BANNER ===== */}
+          {visualAlert && (
+            <div style={{
+              position: 'absolute',
+              top: 16,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 50,
+              background: visualAlert.severity === 'critical'
+                ? 'linear-gradient(135deg, rgba(185,28,28,0.97) 0%, rgba(239,68,68,0.97) 100%)'
+                : 'linear-gradient(135deg, rgba(146,64,14,0.97) 0%, rgba(217,119,6,0.97) 100%)',
+              borderRadius: 14,
+              padding: '12px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              boxShadow: visualAlert.severity === 'critical'
+                ? '0 4px 24px rgba(239,68,68,0.6)'
+                : '0 4px 24px rgba(217,119,6,0.5)',
+              border: `1px solid ${visualAlert.severity === 'critical' ? 'rgba(252,165,165,0.5)' : 'rgba(253,230,138,0.4)'}`,
+              backdropFilter: 'blur(8px)',
+              maxWidth: 520,
+              animation: 'slideDown 0.3s ease',
+            }}>
+              <span style={{ fontSize: 22 }}>
+                {visualAlert.type === 'posture' ? '🛑'
+                  : visualAlert.type === 'attire' ? '👔'
+                  : visualAlert.type === 'background' ? '👥'
+                  : '👁️'}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#FEF3C7', fontSize: 10, fontWeight: 800, letterSpacing: 1, marginBottom: 2 }}>
+                  AI INTERVIEW MONITOR
+                </div>
+                <div style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 700, lineHeight: '1.3' }}>
+                  {visualAlert.message}
+                </div>
+              </div>
+              <button
+                onClick={() => setVisualAlert(null)}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}
+              >✕</button>
+            </div>
+          )}
+
           {/* Question Card (Dark Slate Floating Overlay) */}
+
           <View style={styles.imgQuestionOverlayCard}>
             <View style={styles.imgQuestionCardTopRow}>
               <View style={styles.imgQuestionNumberBadgeRow}>

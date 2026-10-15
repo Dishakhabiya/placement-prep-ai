@@ -101,3 +101,8 @@ class SessionReportRequest(BaseModel):
     total_questions: Optional[int] = None
     questions: Optional[List[Dict[str, Any]]] = None
     evaluations: List[Dict[str, Any]] = Field(default_factory=list, description="List of AnswerEvaluationResponse dicts or answers")
+    visual_issues: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Real-time AI visual monitoring alerts captured during recording (posture, attire, eye contact, background)"
+    )
+
