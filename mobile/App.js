@@ -71,7 +71,7 @@ export default function App() {
         <Stack.Screen
           name="MockInterview"
           component={MockInterviewScreen}
-          options={{ title: 'Module 2: Mock Interview Session' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="PerformanceReport"

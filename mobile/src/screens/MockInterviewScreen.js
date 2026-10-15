@@ -54,8 +54,9 @@ export default function MockInterviewScreen({ navigation }) {
   const [isTtsSpeaking, setIsTtsSpeaking] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
-  // Live Speech Recognition Transcript (for Candidate Speech Display)
   const [liveCandidateTranscript, setLiveCandidateTranscript] = useState('');
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
 
   // Neural Voice Selection (Default: Neerja - Clear Indian English)
   const [selectedVoice, setSelectedVoice] = useState('en-IN-NeerjaNeural');
@@ -282,6 +283,24 @@ export default function MockInterviewScreen({ navigation }) {
       } catch (e) {}
     }
     setHasVideoTrack(false);
+  };
+
+  const handleToggleMute = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = isMuted; // Toggle: if currently muted, enable it
+      });
+    }
+    setIsMuted((prev) => !prev);
+  };
+
+  const handleToggleCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getVideoTracks().forEach((track) => {
+        track.enabled = isCameraOff; // Toggle: if currently off, enable it
+      });
+    }
+    setIsCameraOff((prev) => !prev);
   };
 
   // Fullscreen Helpers (Direct user-gesture driven)
@@ -1188,186 +1207,193 @@ export default function MockInterviewScreen({ navigation }) {
             </div>
           </div>
         )}
-        {/* Dark scrim so overlay text is always readable */}
+        {/* Subtle scrim so question text is readable without darkening candidate video */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.08) 35%, rgba(0,0,0,0.08) 55%, rgba(0,0,0,0.88) 100%)',
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.0) 30%, rgba(0,0,0,0.0) 70%, rgba(0,0,0,0.3) 100%)',
           pointerEvents: 'none',
         }} />
       </div>
 
-      {/* ===== OVERLAY CONTENT (sits above camera) ===== */}
+      {/* ===== OVERLAY CONTENT (sits above camera, designed exactly as Image 01) ===== */}
       <View style={styles.overlayContainer}>
 
-        {/* TOP BAR */}
-        <View style={styles.overlayTopBar}>
-          <View style={styles.badgeContainer}>
-            <Text style={styles.questionIndexBadge}>Q {currentIndex + 1}/{totalCount}</Text>
-            <Text style={styles.categoryBadge}>{String(currentQ?.category || 'TECHNICAL').toUpperCase()}</Text>
-            <Text style={styles.difficultyBadge}>{String(currentQ?.difficulty || 'MEDIUM').toUpperCase()}</Text>
-          </View>
-          <View style={styles.headerRightControls}>
-            <TouchableOpacity style={styles.voiceSelectBtn} onPress={() => setShowVoicePicker(true)}>
-              <Text style={styles.voiceSelectBtnText}>
-                🎙️ {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.accent || 'Voice'} ▾
-              </Text>
+        {/* 1. TOP WHITE HEADER BAR (As seen in Image 01) */}
+        <View style={styles.imgHeaderBar}>
+          {/* Back button & Title */}
+          <View style={styles.imgHeaderLeft}>
+            <TouchableOpacity style={styles.imgBackCircleBtn} onPress={handlePromptEndInterview}>
+              <Text style={styles.imgBackArrow}>←</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.endHeaderBtn} onPress={handlePromptEndInterview}>
-              <Text style={styles.endHeaderBtnText}>End</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* LIVE DOT */}
-        <View style={styles.overlayLiveBadge}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveBadgeText}>LIVE</Text>
-        </View>
-
-        {/* QUESTION CARD — displayed as overlay over the camera */}
-        <View style={styles.overlayQuestionCard}>
-          <View style={styles.overlayQuestionHeader}>
-            <View style={styles.teleprompterTag}>
-              <Text style={styles.teleprompterTagText}>
-                {interviewPhase === 'feedback' ? '📢 AI FEEDBACK' : '🎙️ QUESTION'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.replayAudioBtn}
-              onPress={() => {
-                if (interviewPhase === 'feedback') {
-                  speakTextWithNeuralVoice(spokenFeedbackText);
-                } else if (currentQ?.question_text) {
-                  speakTextWithNeuralVoice(currentQ.question_text, null, currentQ.question_id);
-                }
-              }}
-            >
-              <Text style={styles.replayAudioBtnText}>
-                {isTtsSpeaking ? '🔊 Playing...' : '🔊 Replay'}
-              </Text>
-            </TouchableOpacity>
+            <Text style={styles.imgHeaderTitle}>Mock Interview</Text>
           </View>
 
-          <Text style={styles.overlayQuestionText}>
-            {interviewPhase === 'feedback' ? spokenFeedbackText : currentQ?.question_text}
-          </Text>
-
-          {interviewPhase !== 'feedback' && currentQ?.target_topic ? (
-            <View style={styles.topicPill}>
-              <Text style={styles.topicPillText}>📌 {currentQ.target_topic}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* BOTTOM CONTROLS AREA */}
-        <View style={styles.overlayBottomArea}>
-
-          {/* Compact progress stepper */}
-          <View style={styles.overlayStepperCompact}>
-            {[
-              { label: 'Prep', phases: ['prep'] },
-              { label: 'Record', phases: ['countdown', 'recording'] },
-              { label: 'Feedback', phases: ['evaluating', 'feedback'] },
-            ].map((step, idx) => {
-              const isActive = step.phases.includes(interviewPhase);
-              return (
-                <View key={idx} style={styles.stepItemCompact}>
-                  <View style={[styles.stepNumCircle, isActive && styles.stepNumCircleActive]}>
-                    <Text style={[styles.stepNumText, isActive && styles.stepNumTextActive]}>{idx + 1}</Text>
-                  </View>
-                  <Text style={[styles.stepItemCompactLabel, isActive && { color: '#FFC82C' }]}>{step.label}</Text>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* PHASE CARD */}
-          {interviewPhase === 'prep' && (
-            <View style={styles.overlayPhaseCard}>
-              <View style={styles.phaseHeaderRow}>
-                <View style={styles.phaseTagBadge}>
-                  <Text style={styles.phaseTagBadgeText}>PREPARATION</Text>
-                </View>
-                <Text style={styles.prepTimerDigits}>⏱ {prepTimeRemaining}s</Text>
+          {/* Stepper (1 Prep — 2 Interview — 3 Feedback) */}
+          <View style={styles.imgStepperContainer}>
+            {/* Step 1: Prep */}
+            <View style={styles.imgStepItem}>
+              <View style={[styles.imgStepCircle, interviewPhase === 'prep' ? styles.imgStepCircleActive : styles.imgStepCircleInactive]}>
+                <Text style={[styles.imgStepNumber, interviewPhase === 'prep' ? styles.imgStepNumberActive : styles.imgStepNumberInactive]}>1</Text>
               </View>
-              <Text style={styles.overlayPhaseDesc}>
-                Formulate your answer structure before recording begins.
-              </Text>
-              <TouchableOpacity style={styles.primaryActionBtn} onPress={handleSkipPreparation}>
-                <Text style={styles.primaryActionBtnText}>⚡ Skip & Start Recording</Text>
+              <Text style={[styles.imgStepLabel, interviewPhase === 'prep' ? styles.imgStepLabelActive : styles.imgStepLabelInactive]}>Prep</Text>
+            </View>
+
+            <View style={styles.imgStepDivider} />
+
+            {/* Step 2: Interview */}
+            <View style={styles.imgStepItem}>
+              <View style={[styles.imgStepCircle, (interviewPhase === 'countdown' || interviewPhase === 'recording' || interviewPhase === 'evaluating') ? styles.imgStepCircleActive : styles.imgStepCircleInactive]}>
+                <Text style={[styles.imgStepNumber, (interviewPhase === 'countdown' || interviewPhase === 'recording' || interviewPhase === 'evaluating') ? styles.imgStepNumberActive : styles.imgStepNumberInactive]}>2</Text>
+              </View>
+              <View style={styles.imgStepLabelWithUnderline}>
+                <Text style={[styles.imgStepLabel, (interviewPhase === 'countdown' || interviewPhase === 'recording' || interviewPhase === 'evaluating') ? styles.imgStepLabelActive : styles.imgStepLabelInactive]}>Interview</Text>
+                {(interviewPhase === 'countdown' || interviewPhase === 'recording' || interviewPhase === 'evaluating') && (
+                  <View style={styles.imgStepActiveUnderline} />
+                )}
+              </View>
+            </View>
+
+            <View style={styles.imgStepDivider} />
+
+            {/* Step 3: Feedback */}
+            <View style={styles.imgStepItem}>
+              <View style={[styles.imgStepCircle, interviewPhase === 'feedback' ? styles.imgStepCircleActive : styles.imgStepCircleInactive]}>
+                <Text style={[styles.imgStepNumber, interviewPhase === 'feedback' ? styles.imgStepNumberActive : styles.imgStepNumberInactive]}>3</Text>
+              </View>
+              <Text style={[styles.imgStepLabel, interviewPhase === 'feedback' ? styles.imgStepLabelActive : styles.imgStepLabelInactive]}>Feedback</Text>
+            </View>
+          </View>
+
+          {/* Right Red Button: End Interview */}
+          <TouchableOpacity style={styles.imgEndInterviewBtn} onPress={handlePromptEndInterview}>
+            <View style={styles.imgEndSquareIcon} />
+            <Text style={styles.imgEndInterviewBtnText}>End Interview</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 2. MAIN VIEW AREA (Video background is behind this) */}
+        <View style={styles.imgVideoStageContainer}>
+
+          {/* Question Card (Dark Slate Floating Overlay) */}
+          <View style={styles.imgQuestionOverlayCard}>
+            <View style={styles.imgQuestionCardTopRow}>
+              <View style={styles.imgQuestionNumberBadgeRow}>
+                <Text style={styles.imgChatBubbleIcon}>💬</Text>
+                <Text style={styles.imgQuestionNumberText}>QUESTION {currentIndex + 1}/{totalCount}</Text>
+              </View>
+              <View style={styles.imgDifficultyBadge}>
+                <Text style={styles.imgDifficultyBadgeText}>
+                  {String(currentQ?.difficulty || 'Medium').charAt(0).toUpperCase() + String(currentQ?.difficulty || 'Medium').slice(1).toLowerCase()}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.imgQuestionPromptText}>
+              {interviewPhase === 'feedback' ? spokenFeedbackText : currentQ?.question_text}
+            </Text>
+
+            {/* Preparation Skip Action if in prep phase */}
+            {interviewPhase === 'prep' && (
+              <TouchableOpacity style={styles.imgSkipPrepButton} onPress={handleSkipPreparation}>
+                <Text style={styles.imgSkipPrepText}>⚡ Skip Prep ({prepTimeRemaining}s) & Start Recording →</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
 
-          {interviewPhase === 'countdown' && (
-            <View style={[styles.overlayPhaseCard, styles.countdownCardBorder, { alignItems: 'center' }]}>
-              <Text style={styles.recordingCountdownLabel}>RECORDING IN</Text>
-              <Text style={styles.recordingCountdownNumber}>{countdownRemaining}</Text>
-              <Text style={styles.recordingCountdownSub}>Get ready to speak...</Text>
-            </View>
-          )}
-
-          {interviewPhase === 'recording' && (
-            <View style={[styles.overlayPhaseCard, styles.activeRecordingCard]}>
-              <View style={styles.phaseHeaderRow}>
-                <View style={styles.recordingLiveBadge}>
-                  <View style={styles.liveDotRed} />
-                  <Text style={styles.recordingLiveText}>● REC</Text>
-                </View>
-                <Text style={styles.recordingCountdownDigit}>
-                  ⏱ {formatTime(180 - recordingDuration)}
-                </Text>
-              </View>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${Math.min(100, (recordingDuration / 180) * 100)}%` }]} />
-              </View>
-              {liveCandidateTranscript ? (
-                <Text style={styles.overlayTranscriptText} numberOfLines={2}>
-                  "{liveCandidateTranscript}"
-                </Text>
-              ) : (
-                <Text style={styles.overlayTranscriptText}>
-                  Speak your answer clearly...
-                </Text>
-              )}
-              <TouchableOpacity style={styles.stopAnswerBtn} onPress={handleStopAnswerAndContinue}>
-                <Text style={styles.stopAnswerBtnText}>⏹ Stop Answer & Continue →</Text>
+            {/* Stop Answer Button if in recording phase */}
+            {interviewPhase === 'recording' && (
+              <TouchableOpacity style={styles.imgStopAnswerButton} onPress={handleStopAnswerAndContinue}>
+                <Text style={styles.imgStopAnswerText}>⏹ Stop Answer & Continue →</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
 
-          {interviewPhase === 'evaluating' && (
-            <View style={styles.overlayPhaseCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {/* Evaluating spinner indicator */}
+            {interviewPhase === 'evaluating' && (
+              <View style={styles.imgEvaluatingRow}>
                 <ActivityIndicator size="small" color="#FFC82C" />
-                <Text style={styles.overlayPhaseDesc}>Analyzing your answer & preparing feedback...</Text>
+                <Text style={styles.imgEvaluatingText}>Analyzing answer & p-score...</Text>
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
-          {interviewPhase === 'feedback' && (
-            <View style={styles.overlayPhaseCard}>
-              <Text style={styles.feedbackSpokenTitle}>🔊 AI COACHING</Text>
-              <Text style={styles.overlayFeedbackText} numberOfLines={3}>"{spokenFeedbackText}"</Text>
-              <View style={styles.autoAdvanceRow}>
-                <ActivityIndicator size="small" color="#10B981" />
-                <Text style={styles.autoAdvanceText}>Advancing to next question...</Text>
+          {/* Top Right Floating White Widget: Time Left Timer */}
+          <View style={styles.imgTimerFloatingCard}>
+            <View style={styles.imgTimerCardHeader}>
+              <Text style={styles.imgTimerIcon}>⏱</Text>
+              <Text style={styles.imgTimerHeaderLabel}>Time Left</Text>
+            </View>
+
+            {/* Circular Gauge Ring representation with time in center */}
+            <div style={{
+              position: 'relative',
+              width: 76,
+              height: 76,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg width="76" height="76" viewBox="0 0 76 76" style={{ transform: 'rotate(-90deg)' }}>
+                <circle
+                  cx="38"
+                  cy="38"
+                  r="32"
+                  stroke="#E2E8F0"
+                  strokeWidth="5"
+                  fill="none"
+                />
+                <circle
+                  cx="38"
+                  cy="38"
+                  r="32"
+                  stroke="#3B82F6"
+                  strokeWidth="5"
+                  strokeDasharray="201"
+                  strokeDashoffset={201 - (201 * Math.min(180, Math.max(0, 180 - recordingDuration)) / 180)}
+                  strokeLinecap="round"
+                  fill="none"
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+              </svg>
+              <div style={{
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 15,
+                fontWeight: '800',
+                color: '#1E293B',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              }}>
+                {formatTime(interviewPhase === 'prep' ? prepTimeRemaining : Math.max(0, 180 - recordingDuration))}
+              </div>
+            </div>
+          </View>
+
+          {/* 3. BOTTOM FLOATING PILL CONTROLS (Camera, Mute, Settings) */}
+          <View style={styles.imgBottomPillDock}>
+            {/* Camera Toggle Button */}
+            <TouchableOpacity style={styles.imgPillBtn} onPress={handleToggleCamera}>
+              <View style={[styles.imgPillIconCircle, isCameraOff && styles.imgPillIconCircleOff]}>
+                <Text style={styles.imgPillIconGlyph}>{isCameraOff ? '🚫' : '📹'}</Text>
               </View>
-            </View>
-          )}
-        </View>
+              <Text style={styles.imgPillBtnLabel}>Camera</Text>
+            </TouchableOpacity>
 
-        {/* FLOATING CALL CONTROLS */}
-        <View style={styles.overlayCallControls}>
-          <TouchableOpacity style={styles.controlCircleBtn}>
-            <Text style={styles.controlIconText}>🎙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlCircleBtn}>
-            <Text style={styles.controlIconText}>📹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.endCallCircleBtn} onPress={handlePromptEndInterview}>
-            <Text style={styles.endCallIconText}>📞</Text>
-          </TouchableOpacity>
+            {/* Mute Toggle Button (Red highlighted circle as seen in Image 01) */}
+            <TouchableOpacity style={styles.imgPillBtn} onPress={handleToggleMute}>
+              <View style={[styles.imgPillMicCircle, isMuted && styles.imgPillMicCircleMuted]}>
+                <Text style={styles.imgPillMicIcon}>{isMuted ? '🔇' : '🎙️'}</Text>
+              </View>
+              <Text style={styles.imgPillBtnLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+            </TouchableOpacity>
+
+            {/* Settings (Voice Picker) */}
+            <TouchableOpacity style={styles.imgPillBtn} onPress={() => setShowVoicePicker(true)}>
+              <View style={styles.imgPillIconCircle}>
+                <Text style={styles.imgPillIconGlyph}>⚙️</Text>
+              </View>
+              <Text style={styles.imgPillBtnLabel}>Settings</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -1834,7 +1860,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // FULL SCREEN INTERVIEW OVERLAY STYLES
+  // IMAGE 01 REDESIGN STYLES
   overlayContainer: {
     position: 'absolute',
     top: 0,
@@ -1845,9 +1871,339 @@ const styles = StyleSheet.create({
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
   },
+
+  // 1. Top White Header Bar
+  imgHeaderBar: {
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    zIndex: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  imgHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  imgBackCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  imgBackArrow: {
+    fontSize: 18,
+    color: '#334155',
+    fontWeight: '700',
+  },
+  imgHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  // Stepper (1 Prep - 2 Interview - 3 Feedback)
+  imgStepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  imgStepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  imgStepCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imgStepCircleActive: {
+    backgroundColor: '#3B82F6',
+  },
+  imgStepCircleInactive: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
+  imgStepNumber: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  imgStepNumberActive: {
+    color: '#FFFFFF',
+  },
+  imgStepNumberInactive: {
+    color: '#64748B',
+  },
+  imgStepLabelWithUnderline: {
+    position: 'relative',
+    paddingBottom: 4,
+  },
+  imgStepActiveUnderline: {
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: '#3B82F6',
+    borderRadius: 2,
+  },
+  imgStepLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  imgStepLabelActive: {
+    color: '#3B82F6',
+  },
+  imgStepLabelInactive: {
+    color: '#64748B',
+  },
+  imgStepDivider: {
+    width: 20,
+    height: 1.5,
+    backgroundColor: '#CBD5E1',
+  },
+
+  // Right Red End Interview Button
+  imgEndInterviewBtn: {
+    backgroundColor: '#EF4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  imgEndSquareIcon: {
+    width: 8,
+    height: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1.5,
+  },
+  imgEndInterviewBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // 2. Main Video Stage & Question Overlay
+  imgVideoStageContainer: {
+    flex: 1,
+    position: 'relative',
+    padding: 24,
+    justifyContent: 'space-between',
+  },
+  imgQuestionOverlayCard: {
+    backgroundColor: '#202938',
+    borderRadius: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 22,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginTop: 0,
+  },
+  imgQuestionCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  imgQuestionNumberBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  imgChatBubbleIcon: {
+    fontSize: 15,
+  },
+  imgQuestionNumberText: {
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  imgDifficultyBadge: {
+    backgroundColor: '#785A28',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imgDifficultyBadgeText: {
+    color: '#FEF08A',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  imgQuestionPromptText: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  imgSkipPrepButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+  },
+  imgSkipPrepText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  imgStopAnswerButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+  },
+  imgStopAnswerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  imgEvaluatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  imgEvaluatingText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Floating White Timer Card (Top Right)
+  imgTimerFloatingCard: {
+    position: 'absolute',
+    top: 24,
+    right: 28,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 20,
+  },
+  imgTimerCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  imgTimerIcon: {
+    fontSize: 14,
+  },
+  imgTimerHeaderLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // 3. Bottom Pill Dock Controls (Camera, Mute, Settings)
+  imgBottomPillDock: {
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    borderRadius: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 24,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    zIndex: 25,
+    marginBottom: 10,
+  },
+  imgPillBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 54,
+  },
+  imgPillIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  imgPillIconCircleOff: {
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  imgPillIconGlyph: {
+    fontSize: 19,
+    color: '#FFFFFF',
+  },
+  imgPillMicCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+  },
+  imgPillMicCircleMuted: {
+    backgroundColor: '#64748B',
+  },
+  imgPillMicIcon: {
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  imgPillBtnLabel: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
   overlayTopBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
