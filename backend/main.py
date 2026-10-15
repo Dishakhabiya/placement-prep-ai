@@ -18,8 +18,28 @@ from routers.answers import router as answers_router
 async def lifespan(app: FastAPI):
     # Startup: Initialize SQLite tables
     init_db()
+
+    # Verify edge-tts version to prevent subtle Microsoft 403 issues
+    try:
+        import edge_tts
+        from packaging import version
+        installed_ver = version.parse(edge_tts.__version__)
+        min_ver = version.parse("7.3.1")
+        if installed_ver < min_ver:
+            import logging
+            logging.warning(
+                f"\n{'='*70}\n"
+                f"⚠️  WARNING: edge-tts version is {installed_ver} (outdated).\n"
+                f"   Microsoft requires edge-tts >= 7.3.1 to avoid 403 Forbidden errors.\n"
+                f"   Run: pip install --upgrade 'edge-tts>=7.3.1'\n"
+                f"{'='*70}"
+            )
+    except Exception:
+        pass
+
     yield
     # Shutdown: Clean up if needed
+
 
 
 app = FastAPI(

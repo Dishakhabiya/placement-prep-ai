@@ -99,19 +99,17 @@ placement-prep-ai/
 # 1. Navigate to backend directory
 cd backend
 
-# 2. Create and activate a virtual environment
+# Option 1 (Recommended): Run the automated startup script
+./run.sh
+
+# Option 2 (Manual Setup & Start):
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Download spaCy linguistic model
 python -m spacy download en_core_web_sm
-
-# 5. Start the FastAPI server
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
 
 * Backend API will run at: `http://localhost:8000`
 * Interactive Swagger Docs: `http://localhost:8000/docs`

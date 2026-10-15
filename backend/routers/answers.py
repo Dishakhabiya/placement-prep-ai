@@ -387,6 +387,14 @@ async def generate_neural_tts(req: TtsRequest):
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_bytes += chunk["data"]
+
+        if not audio_bytes or len(audio_bytes) < 100:
+            logging.error("Edge TTS finished but returned empty or incomplete audio stream.")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="TTS service returned empty or incomplete audio data."
+            )
+
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
@@ -396,6 +404,24 @@ async def generate_neural_tts(req: TtsRequest):
                 "Cache-Control": "public, max-age=86400",
             },
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Neural TTS failed: {e}")
-        raise HTTPException(status_code=500, detail=f"TTS generation error: {str(e)}")
+        err_str = str(e)
+        # Redact sensitive authentication tokens and session identifiers from URLs
+        sanitized_err = re.sub(r'(\?|\&)(TrustedClientToken|Sec-MS-GEC|ConnectionId)=[^&\s\']+', r'\1\2=[REDACTED]', err_str)
+        logging.error(f"Neural TTS failed: {sanitized_err}")
+
+        # Map error causes cleanly
+        if "403" in err_str:
+            detail_msg = "TTS service authentication rejected (HTTP 403 Forbidden). Ensure edge-tts is updated to >= 7.3.1."
+            err_status = status.HTTP_502_BAD_GATEWAY
+        elif any(k in err_str.lower() for k in ["timeout", "connection", "network"]):
+            detail_msg = "TTS service network connection timeout."
+            err_status = status.HTTP_504_GATEWAY_TIMEOUT
+        else:
+            detail_msg = f"TTS generation error: {sanitized_err}"
+            err_status = status.HTTP_500_INTERNAL_SERVER_ERROR
+
+        raise HTTPException(status_code=err_status, detail=detail_msg)
+

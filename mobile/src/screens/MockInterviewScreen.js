@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,19 +9,158 @@ import {
   Modal,
   Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProfileStore } from '../store/profileStore';
 import { apiClient } from '../api/client';
 import SectionCard from '../components/SectionCard';
 import Caricatures from '../assets/caricatures';
 
+export const SELECTED_VOICE_KEY = '@placement_prep_selected_voice';
+
 export const NEURAL_VOICES = [
-  { id: 'en-IN-NeerjaNeural', name: 'Neerja (Clear Indian English - Female)', accent: 'Indian Natural' },
-  { id: 'en-US-JennyNeural', name: 'Jenny (Ultra-Clear US English - Female)', accent: 'US Natural' },
-  { id: 'en-US-AriaNeural', name: 'Aria (Professional US English - Female)', accent: 'US Natural' },
-  { id: 'en-US-GuyNeural', name: 'Guy (Calm US English - Male)', accent: 'US Natural' },
-  { id: 'en-IN-PrabhatNeural', name: 'Prabhat (Clear Indian English - Male)', accent: 'Indian Natural' },
-  { id: 'en-GB-SoniaNeural', name: 'Sonia (Natural British English - Female)', accent: 'UK British' },
+  {
+    id: 'en-IN-NeerjaNeural',
+    name: 'Neerja (Clear Indian English)',
+    accent: 'Indian Natural',
+    flag: '🇮🇳',
+    gender: 'female',
+    lang: 'en-IN',
+    previewText: 'Namaste! I am your AI interviewer. My voice is clear and ready to conduct your placement interview.',
+  },
+  {
+    id: 'en-IN-PrabhatNeural',
+    name: 'Prabhat (Clear Indian English)',
+    accent: 'Indian Natural',
+    flag: '🇮🇳',
+    gender: 'male',
+    lang: 'en-IN',
+    previewText: 'Namaste! I am your AI interviewer. I am ready to evaluate your technical and communication skills.',
+  },
+  {
+    id: 'en-US-JennyNeural',
+    name: 'Jenny (Natural US English)',
+    accent: 'US Natural',
+    flag: '🇺🇸',
+    gender: 'female',
+    lang: 'en-US',
+    previewText: 'Hello! I am your AI interviewer. My voice is clear and ready to conduct your interview.',
+  },
+  {
+    id: 'en-US-GuyNeural',
+    name: 'Guy (Professional US English)',
+    accent: 'US Natural',
+    flag: '🇺🇸',
+    gender: 'male',
+    lang: 'en-US',
+    previewText: 'Hello! I am your AI interviewer. Let us get started with your mock interview session.',
+  },
+  {
+    id: 'en-US-AriaNeural',
+    name: 'Aria (Expressive US English)',
+    accent: 'US Natural',
+    flag: '🇺🇸',
+    gender: 'female',
+    lang: 'en-US',
+    previewText: 'Hi there! I am your AI interviewer. I look forward to conducting your placement interview today.',
+  },
+  {
+    id: 'en-GB-SoniaNeural',
+    name: 'Sonia (Natural British English)',
+    accent: 'UK British',
+    flag: '🇬🇧',
+    gender: 'female',
+    lang: 'en-GB',
+    previewText: 'Hello! I am your AI interviewer. I shall be conducting your placement interview today.',
+  },
+  {
+    id: 'en-GB-RyanNeural',
+    name: 'Ryan (Clear British English)',
+    accent: 'UK British',
+    flag: '🇬🇧',
+    gender: 'male',
+    lang: 'en-GB',
+    previewText: 'Hello! I am your AI interviewer. We will begin your interview questions shortly.',
+  },
+  {
+    id: 'en-AU-NatashaNeural',
+    name: 'Natasha (Australian English)',
+    accent: 'Australian',
+    flag: '🇦🇺',
+    gender: 'female',
+    lang: 'en-AU',
+    previewText: "G'day! I am your AI interviewer. Let us begin your interview session.",
+  },
 ];
+
+/**
+ * Matches an accent-appropriate voice from the browser's native SpeechSynthesis engine.
+ */
+export const findMatchingBrowserVoice = (voiceId, availableVoices = []) => {
+  if (!availableVoices || availableVoices.length === 0) return null;
+  const meta = NEURAL_VOICES.find((v) => v.id === voiceId);
+  const targetLang = (meta?.lang || 'en-IN').toLowerCase();
+  const isFemale = (meta?.gender || 'female') === 'female';
+
+  // 1. Direct language code match (e.g. en-IN, en-GB, en-US, en-AU)
+  const langMatches = availableVoices.filter(
+    (v) => v.lang && v.lang.toLowerCase().replace('_', '-') === targetLang
+  );
+
+  if (langMatches.length > 0) {
+    if (isFemale) {
+      const female = langMatches.find(
+        (v) =>
+          !v.name.toLowerCase().includes('male') &&
+          (v.name.toLowerCase().includes('female') ||
+            v.name.toLowerCase().includes('natural') ||
+            v.name.toLowerCase().includes('veena') ||
+            v.name.toLowerCase().includes('heera') ||
+            v.name.toLowerCase().includes('sonia') ||
+            v.name.toLowerCase().includes('hazel') ||
+            v.name.toLowerCase().includes('serena') ||
+            v.name.toLowerCase().includes('samantha') ||
+            v.name.toLowerCase().includes('zira'))
+      );
+      if (female) return female;
+    } else {
+      const male = langMatches.find(
+        (v) =>
+          v.name.toLowerCase().includes('male') ||
+          v.name.toLowerCase().includes('prabhat') ||
+          v.name.toLowerCase().includes('ravi') ||
+          v.name.toLowerCase().includes('rishi') ||
+          v.name.toLowerCase().includes('daniel') ||
+          v.name.toLowerCase().includes('george') ||
+          v.name.toLowerCase().includes('david') ||
+          v.name.toLowerCase().includes('ryan') ||
+          v.name.toLowerCase().includes('guy')
+      );
+      if (male) return male;
+    }
+    return langMatches[0];
+  }
+
+  // 2. Region keyword matching in name or lang
+  const regionTag = targetLang.split('-')[1] || '';
+  const regionMatches = availableVoices.filter((v) => {
+    const l = (v.lang || '').toLowerCase().replace('_', '-');
+    const n = (v.name || '').toLowerCase();
+    if (regionTag === 'in') return l.includes('in') || n.includes('india') || n.includes('hindi');
+    if (regionTag === 'gb') return l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom');
+    if (regionTag === 'au') return l.includes('au') || n.includes('australia');
+    return l.includes('us') || n.includes('united states');
+  });
+
+  if (regionMatches.length > 0) return regionMatches[0];
+
+  // 3. Fallback to any English voice
+  return (
+    availableVoices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+    availableVoices[0] ||
+    null
+  );
+};
+
 
 /**
  * Real-time Mock Interview Screen:
@@ -60,6 +199,8 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Neural Voice Selection (Default: Neerja - Clear Indian English)
   const [selectedVoice, setSelectedVoice] = useState('en-IN-NeerjaNeural');
+  // Ref mirrors selectedVoice so async callbacks always read the latest value without stale closures
+  const selectedVoiceRef = useRef('en-IN-NeerjaNeural');
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [isTestingVoice, setIsTestingVoice] = useState(false);
 
@@ -88,14 +229,15 @@ export default function MockInterviewScreen({ navigation }) {
   const recordedChunksRef = useRef([]);
   const videoElementRef = useRef(null);
 
-  // Ref callback: apply existing stream immediately when <video> mounts into DOM
-  const videoRefCallback = (node) => {
+  // Ref callback: memoized to prevent re-attaching on every state render (stops camera flickering)
+  const videoRefCallback = useCallback((node) => {
     videoElementRef.current = node;
-    if (node && mediaStreamRef.current) {
+    if (node && mediaStreamRef.current && node.srcObject !== mediaStreamRef.current) {
       node.srcObject = mediaStreamRef.current;
     }
-  };
+  }, []);
   const activeAudioRef = useRef(null);
+  const activeUtteranceRef = useRef(null);
   const speechRecognizerRef = useRef(null);
   const audioContextRef = useRef(null);
 
@@ -213,9 +355,20 @@ export default function MockInterviewScreen({ navigation }) {
     };
   }, []);
 
-  // Initialize camera and fetch questions on mount
+  // Initialize camera, fetch questions and restore saved accent voice on mount.
+  // We restore the voice FIRST so prefetchAllQuestionsAudio uses the correct voice ID.
   useEffect(() => {
-    fetchQuestionSet();
+    const init = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(SELECTED_VOICE_KEY);
+        if (saved && NEURAL_VOICES.some((v) => v.id === saved)) {
+          setSelectedVoice(saved);
+          selectedVoiceRef.current = saved;
+        }
+      } catch (_) {}
+      fetchQuestionSet();
+    };
+    init();
     initializeWebcam();
 
     return () => {
@@ -227,10 +380,12 @@ export default function MockInterviewScreen({ navigation }) {
     };
   }, []);
 
-  // Re-attach stream to video element once loading is done (video element now rendered into DOM)
+  // Re-attach stream to video element once loading is done (only if not already attached)
   useEffect(() => {
     if (!loading && videoElementRef.current && mediaStreamRef.current) {
-      videoElementRef.current.srcObject = mediaStreamRef.current;
+      if (videoElementRef.current.srcObject !== mediaStreamRef.current) {
+        videoElementRef.current.srcObject = mediaStreamRef.current;
+      }
     }
   }, [loading]);
 
@@ -329,10 +484,24 @@ export default function MockInterviewScreen({ navigation }) {
   const cancelAudio = () => {
     if (activeAudioRef.current) {
       try {
+        activeAudioRef.current.onended = null;
+        activeAudioRef.current.onerror = null;
         activeAudioRef.current.pause();
         activeAudioRef.current.src = '';
       } catch (e) {}
       activeAudioRef.current = null;
+    }
+    if (activeUtteranceRef.current) {
+      try {
+        activeUtteranceRef.current.onend = null;
+        activeUtteranceRef.current.onerror = null;
+      } catch (e) {}
+      activeUtteranceRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
     }
     setIsTtsSpeaking(false);
   };
@@ -347,7 +516,7 @@ export default function MockInterviewScreen({ navigation }) {
       });
       mediaStreamRef.current = stream;
       setHasVideoTrack(true);
-      if (videoElementRef.current) {
+      if (videoElementRef.current && videoElementRef.current.srcObject !== stream) {
         videoElementRef.current.srcObject = stream;
       }
     } catch (err) {
@@ -445,7 +614,7 @@ export default function MockInterviewScreen({ navigation }) {
     setIsFullscreen(false);
   };
 
-  // High-Fidelity Crystal-Clear Neural Audio Player (Zero Robotic Web Speech)
+  // High-Fidelity Neural Audio Player with Seamless Browser Speech Fallback
   const speakTextWithNeuralVoice = async (text, onEnd = null, questionId = null) => {
     cancelAudio();
     if (!text || !text.trim()) {
@@ -455,17 +624,74 @@ export default function MockInterviewScreen({ navigation }) {
 
     unlockAudioContext();
 
+    // Fallback handler: Native browser SpeechSynthesis (accent-aware when backend TTS is unavailable)
+    const fallbackToBrowserSpeech = (reason) => {
+      console.warn(`Falling back to browser speech synthesis (${reason})`);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined') {
+        try {
+          window.speechSynthesis.cancel();
+          // Clean text: strip markdown asterisks, hashes, brackets, code symbols for natural speech
+          const cleanText = text.replace(/[*_#`~]/g, '').replace(/\[.*?\]/g, '').replace(/\s+/g, ' ').trim();
+          if (!cleanText) {
+            setIsTtsSpeaking(false);
+            if (onEnd) onEnd();
+            return;
+          }
+
+          const voiceMeta = NEURAL_VOICES.find((v) => v.id === selectedVoice);
+          const utterance = new window.SpeechSynthesisUtterance(cleanText);
+          utterance.rate = 0.95;
+          utterance.pitch = 1.0;
+          utterance.lang = voiceMeta?.lang || 'en-US';
+
+          // Select accent-appropriate voice from browser
+          const availableVoices = window.speechSynthesis.getVoices() || [];
+          const matchedVoice = findMatchingBrowserVoice(selectedVoice, availableVoices);
+          if (matchedVoice) {
+            utterance.voice = matchedVoice;
+            utterance.lang = matchedVoice.lang;
+          }
+
+          let ended = false;
+          const safeEnd = () => {
+            if (ended) return;
+            ended = true;
+            activeUtteranceRef.current = null;
+            setIsTtsSpeaking(false);
+            if (onEnd) onEnd();
+          };
+
+          utterance.onend = safeEnd;
+          utterance.onerror = (e) => {
+            console.warn('Browser SpeechSynthesis error:', e);
+            safeEnd();
+          };
+
+          activeUtteranceRef.current = utterance;
+          setIsTtsSpeaking(true);
+          window.speechSynthesis.speak(utterance);
+          return;
+        } catch (synthErr) {
+          console.warn('Browser SpeechSynthesis execution failed:', synthErr);
+        }
+      }
+      setIsTtsSpeaking(false);
+      if (onEnd) onEnd();
+    };
+
     try {
       setIsTtsSpeaking(true);
       setAutoplayBlocked(false);
 
-      const cacheKey = questionId ? `${selectedVoice}_${questionId}` : null;
+      // Use ref so we always get the latest voice even inside async callbacks
+      const currentVoice = selectedVoiceRef.current;
+      const cacheKey = questionId ? `${currentVoice}_${questionId}` : null;
       let audioBlob = cacheKey ? audioCacheRef.current[cacheKey] : null;
 
       if (!audioBlob) {
         audioBlob = await apiClient.getNeuralTtsAudio({
           text: text.trim(),
-          voice: selectedVoice,
+          voice: currentVoice,
           rate: '-3%',
         });
         if (cacheKey && audioBlob) {
@@ -487,54 +713,110 @@ export default function MockInterviewScreen({ navigation }) {
         };
 
         audio.onerror = (e) => {
-          console.warn('Neural audio playback notice:', e);
-          setIsTtsSpeaking(false);
-          setAutoplayBlocked(true);
-          if (onEnd) onEnd();
+          console.warn('Neural audio playback notice, falling back:', e);
+          URL.revokeObjectURL(audioUrl);
+          activeAudioRef.current = null;
+          fallbackToBrowserSpeech('audio element playback error');
         };
 
         try {
           await audio.play();
         } catch (playErr) {
-          // If browser blocked autoplay, flag it so user can click to unmute with 1 click
-          console.warn('Autoplay blocked by browser policy:', playErr);
-          setIsTtsSpeaking(false);
-          setAutoplayBlocked(true);
-          if (onEnd) onEnd();
+          console.warn('Audio play notice, falling back:', playErr);
+          URL.revokeObjectURL(audioUrl);
+          activeAudioRef.current = null;
+          fallbackToBrowserSpeech('audio.play() exception');
         }
       } else {
-        setIsTtsSpeaking(false);
-        if (onEnd) onEnd();
+        fallbackToBrowserSpeech('empty or invalid neural audio response');
       }
     } catch (err) {
-      console.warn('Neural TTS stream notice:', err);
-      setIsTtsSpeaking(false);
-      setAutoplayBlocked(true);
-      if (onEnd) onEnd();
+      console.warn('Neural TTS request failed, activating browser fallback:', err?.message || err);
+      fallbackToBrowserSpeech(err?.message || 'TTS API request failed');
     }
   };
 
   const testVoiceSample = async (voiceId) => {
+    const targetVoiceId = voiceId || selectedVoice;
+    const voiceMeta = NEURAL_VOICES.find((v) => v.id === targetVoiceId);
+    const greetingText = voiceMeta?.previewText || 'Hello! I am your AI interviewer. My voice is clear and ready to conduct your interview.';
+
     setIsTestingVoice(true);
     cancelAudio();
     unlockAudioContext();
     try {
       const audioBlob = await apiClient.getNeuralTtsAudio({
-        text: 'Hello! I am your AI interviewer. My voice is crystal clear and ready to conduct your interview.',
-        voice: voiceId || selectedVoice,
+        text: greetingText,
+        voice: targetVoiceId,
         rate: '-3%',
       });
-      if (audioBlob) {
+      if (audioBlob && audioBlob.size > 100 && typeof window !== 'undefined') {
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         activeAudioRef.current = audio;
-        audio.onended = () => setIsTestingVoice(false);
-        audio.onerror = () => setIsTestingVoice(false);
+        audio.onended = () => {
+          setIsTestingVoice(false);
+          URL.revokeObjectURL(audioUrl);
+          activeAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsTestingVoice(false);
+          URL.revokeObjectURL(audioUrl);
+          activeAudioRef.current = null;
+        };
         await audio.play();
+      } else {
+        throw new Error('Neural audio sample unavailable');
       }
     } catch (e) {
+      // Accent-aware fallback for test voice sample
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined') {
+        try {
+          window.speechSynthesis.cancel();
+          const utt = new window.SpeechSynthesisUtterance(greetingText);
+          utt.rate = 0.95;
+          utt.pitch = 1.0;
+          utt.lang = voiceMeta?.lang || 'en-US';
+
+          const availableVoices = window.speechSynthesis.getVoices() || [];
+          const matched = findMatchingBrowserVoice(targetVoiceId, availableVoices);
+          if (matched) {
+            utt.voice = matched;
+            utt.lang = matched.lang;
+          }
+
+          utt.onend = () => setIsTestingVoice(false);
+          utt.onerror = () => setIsTestingVoice(false);
+          activeUtteranceRef.current = utt;
+          window.speechSynthesis.speak(utt);
+          return;
+        } catch (err) {}
+      }
       setIsTestingVoice(false);
     }
+  };
+
+  const handleSelectVoice = (voiceId) => {
+    setSelectedVoice(voiceId);
+    selectedVoiceRef.current = voiceId; // keep ref in sync immediately
+    audioCacheRef.current = {}; // clear cached audio so new accent is used immediately
+    try {
+      AsyncStorage.setItem(SELECTED_VOICE_KEY, voiceId);
+    } catch (_) {}
+    setShowVoicePicker(false);
+    if (interviewPhase === 'ready') {
+      // Play a preview sample on the ready screen
+      testVoiceSample(voiceId);
+    } else if (['prep', 'countdown', 'recording'].includes(interviewPhase)) {
+      // Re-speak the current question with the new accent mid-interview
+      const q = questions[currentIndex];
+      if (q && q.question_text) {
+        cancelAudio();
+        speakTextWithNeuralVoice(q.question_text, null, null);
+      }
+    }
+    // Re-fetch audio for all questions in new accent (background)
+    prefetchAllQuestionsAudio(questions, voiceId);
   };
 
   const formatTime = (seconds) => {
@@ -558,8 +840,8 @@ export default function MockInterviewScreen({ navigation }) {
       setQuestions(qList);
       setInterviewPhase('ready');
 
-      // Pre-fetch neural audio for all questions immediately
-      prefetchAllQuestionsAudio(qList, selectedVoice);
+      // Use ref (not state) so we always get the restored voice even if state hasn't re-rendered yet
+      prefetchAllQuestionsAudio(qList, selectedVoiceRef.current);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to load interview questions.');
     } finally {
@@ -1160,11 +1442,18 @@ export default function MockInterviewScreen({ navigation }) {
                 style={styles.readyVoiceSelector}
                 onPress={() => setShowVoicePicker(true)}
               >
-                <View>
-                  <Text style={styles.readyVoiceName}>
-                    {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.name || selectedVoice}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ fontSize: 24 }}>
+                    {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.flag || '🎙️'}
                   </Text>
-                  <Text style={styles.readyVoicePill}>Microsoft Studio Neural Audio (HD)</Text>
+                  <View>
+                    <Text style={styles.readyVoiceName}>
+                      {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.name || selectedVoice}
+                    </Text>
+                    <Text style={styles.readyVoicePill}>
+                      Accent: {NEURAL_VOICES.find((v) => v.id === selectedVoice)?.accent || 'Natural'} • Microsoft Neural Audio (HD)
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.changeVoiceLink}>Change Voice ▾</Text>
               </TouchableOpacity>
@@ -1224,19 +1513,18 @@ export default function MockInterviewScreen({ navigation }) {
                     <TouchableOpacity
                       key={v.id}
                       style={[styles.voiceItem, isSelected && styles.voiceItemSelected]}
-                      onPress={() => {
-                        setSelectedVoice(v.id);
-                        setShowVoicePicker(false);
-                        testVoiceSample(v.id);
-                        // Re-prefetch for newly selected voice
-                        prefetchAllQuestionsAudio(questions, v.id);
-                      }}
+                      onPress={() => handleSelectVoice(v.id)}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
-                          {v.name}
-                        </Text>
-                        <Text style={styles.voiceItemLang}>Accent: {v.accent}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <Text style={{ fontSize: 22 }}>{v.flag}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
+                            {v.name}
+                          </Text>
+                          <Text style={styles.voiceItemLang}>
+                            Accent: {v.accent} • {v.gender === 'female' ? 'Female' : 'Male'}
+                          </Text>
+                        </View>
                       </View>
                       {isSelected && <Text style={styles.voiceItemCheck}>✓</Text>}
                     </TouchableOpacity>
@@ -1947,18 +2235,18 @@ export default function MockInterviewScreen({ navigation }) {
                   <TouchableOpacity
                     key={v.id}
                     style={[styles.voiceItem, isSelected && styles.voiceItemSelected]}
-                    onPress={() => {
-                      setSelectedVoice(v.id);
-                      setShowVoicePicker(false);
-                      testVoiceSample(v.id);
-                      prefetchAllQuestionsAudio(questions, v.id);
-                    }}
+                    onPress={() => handleSelectVoice(v.id)}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
-                        {v.name}
-                      </Text>
-                      <Text style={styles.voiceItemLang}>Accent: {v.accent}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <Text style={{ fontSize: 22 }}>{v.flag}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.voiceItemName, isSelected && styles.voiceItemNameSelected]}>
+                          {v.name}
+                        </Text>
+                        <Text style={styles.voiceItemLang}>
+                          Accent: {v.accent} • {v.gender === 'female' ? 'Female' : 'Male'}
+                        </Text>
+                      </View>
                     </View>
                     {isSelected && <Text style={styles.voiceItemCheck}>✓</Text>}
                   </TouchableOpacity>

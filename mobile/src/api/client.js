@@ -255,11 +255,22 @@ export const apiClient = {
       body: JSON.stringify({ text, voice, rate, pitch }),
     }, 15000);
     if (!res.ok) {
-      throw new Error(`TTS server error (${res.status})`);
+      let detail = `TTS server error (${res.status})`;
+      try {
+        const errorJson = await res.json();
+        if (errorJson && errorJson.detail) {
+          detail = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+        }
+      } catch (_) {}
+      throw new Error(detail);
     }
     const blob = await res.blob();
+    if (!blob || blob.size < 50) {
+      throw new Error('TTS server returned empty or incomplete audio data');
+    }
     return blob;
   },
+
 
   async evaluateSpeechAnswer(paramsOrFormData) {
     if (typeof FormData !== 'undefined' && paramsOrFormData instanceof FormData) {
