@@ -61,6 +61,7 @@ export default function PerformanceReportScreen({ route, navigation }) {
             question_id: a.question_id || a.evaluation?.question_id,
             target_topic: q?.target_topic || a.evaluation?.target_topic,
             question_text: q?.question_text || a.question_text || a.evaluation?.question_text,
+            followup: a.followup || a.evaluation?.followup || null,
           };
         }
         // Stub evaluation from local transcript data so answered count is correct

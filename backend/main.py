@@ -11,6 +11,7 @@ from db import init_db
 from routers.profile import router as profile_router
 from routers.questions import router as questions_router
 from routers.answers import router as answers_router
+from routers.chat import router as chat_router
 
 
 
@@ -42,6 +43,7 @@ app.add_middleware(
 app.include_router(profile_router)
 app.include_router(questions_router)
 app.include_router(answers_router)
+app.include_router(chat_router)
 
 
 

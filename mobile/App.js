@@ -13,6 +13,7 @@ import TopicsScreen from './src/screens/TopicsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import MockInterviewScreen from './src/screens/MockInterviewScreen';
 import PerformanceReportScreen from './src/screens/PerformanceReportScreen';
+import ChatbotScreen from './src/screens/ChatbotScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -77,6 +78,11 @@ export default function App() {
           name="PerformanceReport"
           component={PerformanceReportScreen}
           options={{ title: 'Session Performance Report' }}
+        />
+        <Stack.Screen
+          name="Chatbot"
+          component={ChatbotScreen}
+          options={{ title: 'AI Placement Coach' }}
         />
         <Stack.Screen
           name="History"

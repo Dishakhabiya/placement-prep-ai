@@ -39,9 +39,15 @@ export default function MockInterviewScreen({ navigation }) {
   const { currentProfile } = useProfileStore();
 
   const [questions, setQuestions] = useState([]);
+  const questionsRef = useRef([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [evaluatingStatusText, setEvaluatingStatusText] = useState('Analyzing answer & p-score...');
+
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
   // Workflow phases: 'ready' | 'prep' | 'countdown' | 'recording' | 'evaluating' | 'feedback' | 'completed'
   const [interviewPhase, setInterviewPhase] = useState('ready');
@@ -555,6 +561,7 @@ export default function MockInterviewScreen({ navigation }) {
       setErrorMsg(null);
       const res = await apiClient.generateQuestions(currentProfile.profile_id, 5);
       const qList = res.questions || [];
+      questionsRef.current = qList;
       setQuestions(qList);
       setInterviewPhase('ready');
 
@@ -573,11 +580,12 @@ export default function MockInterviewScreen({ navigation }) {
     if (shouldEnterFullscreen) {
       enterFullscreen();
     }
-    startPreparationPhase(0, questions);
+    const currentQList = questionsRef.current.length > 0 ? questionsRef.current : questions;
+    startPreparationPhase(0, currentQList);
   };
 
   // Phase 1: 10-Second Preparation Phase
-  const startPreparationPhase = (index, questionList = questions) => {
+  const startPreparationPhase = (index, questionList = (questionsRef.current.length > 0 ? questionsRef.current : questions)) => {
     clearAllTimers();
     cancelAudio();
     stopSpeechRecognition();
@@ -588,6 +596,7 @@ export default function MockInterviewScreen({ navigation }) {
     setRecordingError(null);
     setCurrentFeedback(null);
     setSpokenFeedbackText('');
+    setEvaluatingStatusText('Analyzing answer & p-score...');
 
     const q = questionList[index];
     if (q && q.question_text) {
@@ -911,19 +920,152 @@ export default function MockInterviewScreen({ navigation }) {
         candidateSpeech ||
         'Answer recorded.';
 
-      setSessionAnswers((prev) => ({
-        ...prev,
-        [answerId]: {
-          ...prev[answerId],
-          evaluated: true,
-          status: 'saved',
-          evaluation: evalResult,
-          transcript: finalTranscript,
-        },
-      }));
+      const isMainQuestion = !currentQ?.is_followup;
+      const missingConcepts = evalResult?.concept_coverage?.missing_concepts || [];
+      const hasMeaningfulMissing =
+        Array.isArray(missingConcepts) &&
+        missingConcepts.filter((c) => c && typeof c === 'string' && c.trim().length > 0).length > 0;
+      const coverageScore = evalResult?.concept_coverage?.coverage_score ?? 100;
+
+      // Determine whether an adaptive follow-up question is appropriate:
+      // 1. Current question must be a main question (not already a follow-up)
+      // 2. Candidate answer has meaningful missing concepts and coverage score < 85%
+      // 3. Question has not already had a follow-up generated (max 1 follow-up per main question)
+      const shouldProbeFollowup =
+        isMainQuestion &&
+        hasMeaningfulMissing &&
+        coverageScore < 85 &&
+        !currentQ?.has_generated_followup;
+
+      let followupData = null;
+
+      if (shouldProbeFollowup) {
+        setEvaluatingStatusText('Generating adaptive follow-up question...');
+        try {
+          followupData = await apiClient.generateFollowup({
+            questionId: currentQ.question_id,
+            originalQuestion: currentQ.question_text,
+            targetTopic: currentQ.target_topic || '',
+            candidateAnswer: finalTranscript,
+            missingConcepts: missingConcepts,
+          });
+        } catch (fErr) {
+          console.warn('Adaptive follow-up generation failed, proceeding with standard feedback:', fErr);
+          followupData = null;
+        }
+      }
+
+      const hasValidFollowup =
+        followupData &&
+        typeof followupData.followup_question === 'string' &&
+        followupData.followup_question.trim().length > 10;
+
+      if (isMainQuestion) {
+        let followupRecord = null;
+        if (hasValidFollowup) {
+          currentQ.has_generated_followup = true;
+          followupRecord = {
+            followup_id: followupData.followup_id,
+            parent_question_id: currentQ.question_id,
+            followup_question: followupData.followup_question.trim(),
+            focus_area: followupData.focus_area || missingConcepts.join(', '),
+            expected_key_concepts: followupData.expected_key_concepts || missingConcepts,
+            status: 'pending',
+            answered: false,
+          };
+          evalResult.followup = followupRecord;
+
+          const followupQuestionObj = {
+            question_id: followupData.followup_id,
+            parent_question_id: currentQ.question_id,
+            question_text: followupData.followup_question.trim(),
+            category: currentQ.category || 'technical',
+            difficulty: currentQ.difficulty || 'medium',
+            target_topic: currentQ.target_topic || 'Adaptive Follow-up',
+            expected_key_concepts: followupData.expected_key_concepts || missingConcepts,
+            context_reason: `Adaptive follow-up probing ${followupData.focus_area || 'missing concepts'}`,
+            is_followup: true,
+            focus_area: followupData.focus_area,
+            main_question_id: currentQ.question_id,
+            main_question_index: currentIndex,
+          };
+
+          const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
+          const updatedQuestions = [...currentQuestions];
+          updatedQuestions.splice(currentIndex + 1, 0, followupQuestionObj);
+          questionsRef.current = updatedQuestions;
+          setQuestions(updatedQuestions);
+
+          // Background pre-fetch of neural TTS audio for follow-up
+          apiClient.getNeuralTtsAudio({
+            text: followupQuestionObj.question_text,
+            voice: selectedVoice,
+          }).then((blob) => {
+            if (blob) {
+              audioCacheRef.current[followupQuestionObj.question_id] = blob;
+            }
+          }).catch(() => {});
+        }
+
+        setSessionAnswers((prev) => ({
+          ...prev,
+          [answerId]: {
+            ...prev[answerId],
+            evaluated: true,
+            status: 'saved',
+            evaluation: evalResult,
+            transcript: finalTranscript,
+            followup: followupRecord,
+          },
+        }));
+      } else {
+        // Follow-up question was answered
+        setSessionAnswers((prev) => {
+          const parentAns = prev[currentQ.parent_question_id];
+          const updatedParentFollowup = parentAns?.followup ? {
+            ...parentAns.followup,
+            answer_transcript: finalTranscript,
+            evaluation: evalResult,
+            answered: true,
+            status: 'saved',
+          } : {
+            followup_id: currentQ.question_id,
+            parent_question_id: currentQ.parent_question_id,
+            followup_question: currentQ.question_text,
+            focus_area: currentQ.focus_area,
+            answer_transcript: finalTranscript,
+            evaluation: evalResult,
+            answered: true,
+            status: 'saved',
+          };
+
+          return {
+            ...prev,
+            [answerId]: {
+              ...prev[answerId],
+              evaluated: true,
+              status: 'saved',
+              evaluation: evalResult,
+              transcript: finalTranscript,
+              is_followup: true,
+              parent_question_id: currentQ.parent_question_id,
+            },
+            ...(parentAns ? {
+              [currentQ.parent_question_id]: {
+                ...parentAns,
+                followup: updatedParentFollowup,
+                evaluation: parentAns.evaluation ? {
+                  ...parentAns.evaluation,
+                  followup: updatedParentFollowup,
+                } : null,
+              },
+            } : {}),
+          };
+        });
+      }
 
       // Construct spoken mistakes feedback
-      const spokenFeedback = constructSpokenMistakesFeedback(evalResult, currentQ);
+      const spokenFeedback = constructSpokenMistakesFeedback(evalResult, currentQ, hasValidFollowup ? followupData : null);
       setSpokenFeedbackText(spokenFeedback);
       setCurrentFeedback(evalResult);
 
@@ -964,13 +1106,23 @@ export default function MockInterviewScreen({ navigation }) {
   };
 
   // Construct natural, professional spoken mistake & coaching feedback
-  const constructSpokenMistakesFeedback = (evaluation, question) => {
+  const constructSpokenMistakesFeedback = (evaluation, question, followupData = null) => {
     const parts = [];
 
     const relevance = evaluation?.relevance?.relevance_score ?? 75;
     const coverage = evaluation?.concept_coverage?.coverage_score ?? 70;
     const missingConcepts = evaluation?.concept_coverage?.missing_concepts || [];
     const fillers = evaluation?.delivery?.filler_words?.total_fillers ?? 0;
+
+    if (question?.is_followup) {
+      if (relevance >= 75 && coverage >= 70) {
+        parts.push('Well done! That clarifies the concept nicely.');
+      } else {
+        parts.push('Thank you for providing more detail on that concept.');
+      }
+      parts.push('Now, moving to your next question.');
+      return parts.join(' ');
+    }
 
     if (relevance >= 80 && coverage >= 80) {
       parts.push('Great job! That was a strong, well-structured answer.');
@@ -989,7 +1141,13 @@ export default function MockInterviewScreen({ navigation }) {
       parts.push(`You used ${fillers} filler words. Aim to pause calmly instead of using fillers.`);
     }
 
-    parts.push('Now, moving to your next question.');
+    if (followupData) {
+      const focusText = followupData.focus_area ? ` on ${followupData.focus_area}` : '';
+      parts.push(`Let's explore this further with an adaptive follow-up question${focusText}.`);
+    } else {
+      parts.push('Now, moving to your next question.');
+    }
+
     return parts.join(' ');
   };
 
@@ -999,10 +1157,11 @@ export default function MockInterviewScreen({ navigation }) {
     cancelAudio();
     stopSpeechRecognition();
 
+    const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
     const nextIndex = currentIndex + 1;
-    if (nextIndex < questions.length) {
+    if (nextIndex < currentQuestions.length) {
       setCurrentIndex(nextIndex);
-      startPreparationPhase(nextIndex, questions);
+      startPreparationPhase(nextIndex, currentQuestions);
     } else {
       handleCompleteInterview();
     }
@@ -1038,27 +1197,45 @@ export default function MockInterviewScreen({ navigation }) {
       const words = candidateSpeech.split(/\s+/).filter(Boolean);
 
       if (words.length >= 3 && recordingDuration >= 3) {
-        setSessionAnswers((prev) => ({
-          ...prev,
-          [answerId]: {
-            question_id: answerId,
-            question_text: currentQ ? currentQ.question_text : '',
-            duration: recordingDuration,
-            status: 'saved',
-            evaluated: true,
-            transcript: candidateSpeech,
-            evaluation: {
+        const evalStub = {
+          question_id: answerId,
+          question_text: currentQ ? currentQ.question_text : '',
+          relevance: { relevance_score: 55, reasoning: 'Candidate provided a brief answer before ending session.' },
+          concept_coverage: { coverage_score: 30, covered_concepts: [], missing_concepts: currentQ?.expected_key_concepts || [] },
+          transcript_metadata: { transcript: candidateSpeech, word_count: words.length, duration_seconds: recordingDuration },
+          delivery_metrics: { words_per_minute: Math.round((words.length / recordingDuration) * 60), pace_rating: 'Optimal', total_filler_words: 0, extended_pause_count: 0 },
+          status: 'evaluated',
+        };
+
+        setSessionAnswers((prev) => {
+          const next = {
+            ...prev,
+            [answerId]: {
               question_id: answerId,
               question_text: currentQ ? currentQ.question_text : '',
-              relevance: { relevance_score: 55, reasoning: 'Candidate provided a brief answer before ending session.' },
-              concept_coverage: { coverage_score: 30, covered_concepts: [], missing_concepts: currentQ?.expected_key_concepts || [] },
-              transcript_metadata: { transcript: candidateSpeech, word_count: words.length, duration_seconds: recordingDuration },
-              delivery_metrics: { words_per_minute: Math.round((words.length / recordingDuration) * 60), pace_rating: 'Optimal', total_filler_words: 0, extended_pause_count: 0 },
-              status: 'evaluated',
+              duration: recordingDuration,
+              status: 'saved',
+              evaluated: true,
+              transcript: candidateSpeech,
+              evaluation: evalStub,
+              error: null,
             },
-            error: null,
-          },
-        }));
+          };
+          if (currentQ?.is_followup && prev[currentQ.parent_question_id]) {
+            const p = prev[currentQ.parent_question_id];
+            next[currentQ.parent_question_id] = {
+              ...p,
+              followup: {
+                ...(p.followup || {}),
+                answer_transcript: candidateSpeech,
+                evaluation: evalStub,
+                answered: true,
+                status: 'saved',
+              },
+            };
+          }
+          return next;
+        });
       } else {
         // No real speech spoken -> Question was skipped
         setSessionAnswers((prev) => ({
@@ -1084,27 +1261,44 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Navigate to Performance Report Screen
   const handleNavigateToReport = () => {
+    const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
+    const mainQuestions = currentQuestions.filter((q) => !q.is_followup);
+
     // Convert sessionAnswers object -> flat serializable array PerformanceReportScreen expects
-    const sessionAnswersArray = Object.values(sessionAnswers).map((a) => {
-      const { blob: _removedBlob, ...serializableAnswer } = a || {};
+    const sessionAnswersArray = mainQuestions.map((q) => {
+      const a = sessionAnswers[q.question_id] || {
+        question_id: q.question_id,
+        question_text: q.question_text,
+        status: 'skipped',
+        evaluated: false,
+        transcript: null,
+        evaluation: null,
+      };
+      const { blob: _removedBlob, ...serializableAnswer } = a;
       return {
         ...serializableAnswer,
-        question: questions.find((q) => q.question_id === a.question_id) || null,
+        question: q,
       };
     });
 
     navigation.navigate('PerformanceReport', {
       sessionAnswers: sessionAnswersArray,
-      questions: questions,
+      questions: mainQuestions,
       profile: currentProfile,
       sessionId: `mock_session_${Date.now()}`,
       visualIssues: sessionVisualIssues, // AI visual monitoring alerts
     });
   };
 
-  const answeredCount = Object.keys(sessionAnswers).length;
-  const totalCount = questions.length;
+  const mainQuestions = questions.filter((q) => !q.is_followup);
+  const totalCount = Math.max(mainQuestions.length, 1);
+  const answeredCount = mainQuestions.filter((q) => sessionAnswers[q.question_id]?.status === 'saved' || sessionAnswers[q.question_id]?.evaluated).length;
   const currentQ = questions[currentIndex];
+  const currentMainIndex = currentQ?.is_followup
+    ? (currentQ.main_question_index ?? questions.slice(0, currentIndex).filter((q) => !q.is_followup).length - 1)
+    : questions.slice(0, currentIndex + 1).filter((q) => !q.is_followup).length - 1;
+  const displayMainIndex = Math.max(1, currentMainIndex + 1);
+
 
   // Loading State
   if (loading) {
@@ -1812,12 +2006,18 @@ export default function MockInterviewScreen({ navigation }) {
           <View style={styles.imgQuestionOverlayCard}>
             <View style={styles.imgQuestionCardTopRow}>
               <View style={styles.imgQuestionNumberBadgeRow}>
-                <Text style={styles.imgChatBubbleIcon}>💬</Text>
-                <Text style={styles.imgQuestionNumberText}>QUESTION {currentIndex + 1}/{totalCount}</Text>
+                <Text style={styles.imgChatBubbleIcon}>{currentQ?.is_followup ? '⚡' : '💬'}</Text>
+                <Text style={styles.imgQuestionNumberText}>
+                  {currentQ?.is_followup
+                    ? `ADAPTIVE FOLLOW-UP • Q${displayMainIndex}`
+                    : `QUESTION ${displayMainIndex}/${totalCount}`}
+                </Text>
               </View>
-              <View style={styles.imgDifficultyBadge}>
-                <Text style={styles.imgDifficultyBadgeText}>
-                  {String(currentQ?.difficulty || 'Medium').charAt(0).toUpperCase() + String(currentQ?.difficulty || 'Medium').slice(1).toLowerCase()}
+              <View style={[styles.imgDifficultyBadge, currentQ?.is_followup && styles.imgFollowupBadge]}>
+                <Text style={[styles.imgDifficultyBadgeText, currentQ?.is_followup && styles.imgFollowupBadgeText]}>
+                  {currentQ?.is_followup
+                    ? (currentQ.focus_area ? `Focus: ${currentQ.focus_area}` : 'Follow-up')
+                    : (String(currentQ?.difficulty || 'Medium').charAt(0).toUpperCase() + String(currentQ?.difficulty || 'Medium').slice(1).toLowerCase())}
                 </Text>
               </View>
             </View>
@@ -1844,10 +2044,11 @@ export default function MockInterviewScreen({ navigation }) {
             {interviewPhase === 'evaluating' && (
               <View style={styles.imgEvaluatingRow}>
                 <ActivityIndicator size="small" color="#FFC82C" />
-                <Text style={styles.imgEvaluatingText}>Analyzing answer & p-score...</Text>
+                <Text style={styles.imgEvaluatingText}>{evaluatingStatusText || 'Analyzing answer & p-score...'}</Text>
               </View>
             )}
           </View>
+
 
           {/* Top Right Floating White Widget: Time Left Timer */}
           <View style={styles.imgTimerFloatingCard}>

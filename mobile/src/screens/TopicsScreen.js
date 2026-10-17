@@ -145,6 +145,14 @@ export default function TopicsScreen({ navigation }) {
         >
           <Text style={styles.startInterviewBtnText}>🚀 Start Mock Interview (Module 2) →</Text>
         </TouchableOpacity>
+
+        {/* Chat with AI Coach CTA */}
+        <TouchableOpacity
+          style={styles.chatCoachBtn}
+          onPress={() => navigation.navigate('Chatbot')}
+        >
+          <Text style={styles.chatCoachBtnText}>💬 Chat with AI Coach</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -358,6 +366,23 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  chatCoachBtn: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  chatCoachBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
 });

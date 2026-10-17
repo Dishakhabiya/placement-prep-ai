@@ -308,6 +308,56 @@ export const apiClient = {
       return { overall_alert: false, alert_message: '', error: e.message };
     }
   },
+
+  /**
+   * Feature 4: Chatbot API endpoints
+   */
+  async sendChatMessage({ sessionId, profileId, userMessage }) {
+    try {
+      const res = await fetchWithTimeout(
+        `${API_BASE_URL}/api/chat/message`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId || null,
+            profile_id: profileId,
+            user_message: userMessage,
+          }),
+        },
+        35000
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.detail || `Chat request failed with status ${res.status}` };
+      }
+      return data;
+    } catch (e) {
+      return { error: e.message || 'Chat request failed' };
+    }
+  },
+
+  async getChatSession(sessionId) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/chat/${sessionId}`, { method: 'GET' }, 15000);
+      const data = await res.json();
+      if (!res.ok) return { error: data.detail || 'Failed to fetch chat session' };
+      return data;
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  async deleteChatSession(sessionId) {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE_URL}/api/chat/${sessionId}`, { method: 'DELETE' }, 10000);
+      const data = await res.json();
+      if (!res.ok) return { error: data.detail || 'Failed to delete chat session' };
+      return data;
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
 };
 
 

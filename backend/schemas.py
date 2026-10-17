@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -118,3 +119,43 @@ class FollowupResponse(BaseModel):
     followup_question: str = Field(..., description="Text of the adaptive follow-up question")
     focus_area: str = Field(default="", description="Specific weak area or concept being probed")
     expected_key_concepts: List[str] = Field(default_factory=list, description="Expected concepts for follow-up")
+
+
+# ==========================================
+# Chatbot Schemas (Feature 4)
+# ==========================================
+
+class ChatMessageRequest(BaseModel):
+    profile_id: str = Field(..., description="ID of the candidate profile to provide context")
+    session_id: Optional[str] = Field(default=None, description="Chat session ID; if omitted, a new session is created")
+    user_message: str = Field(..., min_length=1, description="User's chat input")
+
+
+class SuggestedAction(BaseModel):
+    title: str = Field(..., description="Human-readable chip title")
+    action_type: str = Field(..., description="Action identifier: practice_topic, review_skills, mock_interview, ask_more")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="Action-specific parameters")
+
+
+class ChatMessageResponse(BaseModel):
+    session_id: str = Field(..., description="Chat session ID")
+    reply: str = Field(..., description="Assistant reply")
+    intent: str = Field(..., description="Detected intent: interview_prep, skill_gap, profile_inquiry, general_qa")
+    model: str = Field(..., description="Model used for generation or nlp_fallback")
+    suggested_actions: List[SuggestedAction] = Field(default_factory=list, description="0-2 relevant suggested follow-up actions")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the message response")
+
+
+class ChatMessageItem(BaseModel):
+    message_id: int = Field(..., description="Sequential ID of message")
+    sender: str = Field(..., description="user or assistant")
+    content: str = Field(..., description="Message text")
+    created_at: datetime = Field(..., description="Timestamp")
+
+
+class ChatSessionResponse(BaseModel):
+    session_id: str = Field(..., description="Chat session ID")
+    profile_id: str = Field(..., description="Candidate profile ID")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last updated timestamp")
+    messages: List[ChatMessageItem] = Field(default_factory=list, description="All messages in chronological order")
