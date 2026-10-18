@@ -61,6 +61,7 @@ class AnswerEvaluationResponse(BaseModel):
     concept_coverage: ConceptCoverageSummary = Field(..., description="Expected-concept coverage breakdown")
     delivery_metrics: Optional[Any] = Field(default=None, description="Module 4 speaking delivery metrics (WPM, fillers, pauses)")
     visual_metrics: Optional[Any] = Field(default=None, description="Module 4 computer vision metrics (face presence, centering, posture)")
+    semantic_quality: Optional[Any] = Field(default=None, description="Module 4 Sentence-BERT semantic answer quality analysis")
     evaluated_at: str = Field(..., description="ISO 8601 UTC timestamp of evaluation")
 
 

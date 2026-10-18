@@ -17,6 +17,13 @@ from module4.visual import (
     extract_sampled_frames_from_video,
 )
 from module4.reporting import aggregate_session_report
+from module4.sbert_analyzer import (
+    score_answer_semantics,
+    score_session_answers,
+    get_sbert_status,
+    ConceptSemanticScore,
+    SemanticQualityResult,
+)
 
 __all__ = [
     "SpeakingDeliveryMetrics",
@@ -24,6 +31,8 @@ __all__ = [
     "QuestionReportItem",
     "SessionReportResponse",
     "SessionReportRequest",
+    "ConceptSemanticScore",
+    "SemanticQualityResult",
     "analyze_speaking_delivery",
     "calculate_words_per_minute",
     "extract_filler_words",
@@ -32,4 +41,7 @@ __all__ = [
     "get_face_cascade",
     "extract_sampled_frames_from_video",
     "aggregate_session_report",
+    "score_answer_semantics",
+    "score_session_answers",
+    "get_sbert_status",
 ]

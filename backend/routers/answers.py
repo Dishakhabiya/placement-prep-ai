@@ -30,6 +30,7 @@ from module4 import (
     analyze_speaking_delivery,
     analyze_video_frames,
     aggregate_session_report,
+    score_answer_semantics,
     SessionReportRequest,
     SessionReportResponse,
 )
@@ -212,6 +213,17 @@ async def transcribe_and_evaluate_answer(
     # Attach Visual Metrics
     evaluation.visual_metrics = visual_analysis_result
 
+    # 10. Compute Module 4 SBERT Semantic Quality Metrics
+    if not is_silent and concept_list:
+        try:
+            evaluation.semantic_quality = score_answer_semantics(
+                answer_text=transcript_text,
+                expected_concepts=concept_list,
+            )
+        except Exception as se:
+            logger.warning(f"Module 4 SBERT semantic analysis skipped: {se}")
+            evaluation.semantic_quality = None
+
     return evaluation
 
 
@@ -274,6 +286,17 @@ def analyze_text_answer(
         )
     except Exception:
         evaluation.delivery_metrics = None
+
+    # Compute Module 4 SBERT Semantic Quality Metrics
+    if req.answer_text and req.expected_key_concepts:
+        try:
+            evaluation.semantic_quality = score_answer_semantics(
+                answer_text=req.answer_text,
+                expected_concepts=req.expected_key_concepts,
+            )
+        except Exception as se:
+            logger.warning(f"Module 4 SBERT semantic analysis skipped: {se}")
+            evaluation.semantic_quality = None
 
     return evaluation
 

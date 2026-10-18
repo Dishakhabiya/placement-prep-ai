@@ -94,13 +94,15 @@ export default function MockInterviewScreen({ navigation }) {
   const recordedChunksRef = useRef([]);
   const videoElementRef = useRef(null);
 
-  // Ref callback: apply existing stream immediately when <video> mounts into DOM
-  const videoRefCallback = (node) => {
+  // Ref callback: apply existing stream immediately when <video> mounts into DOM.
+  // useCallback ensures the same function reference is used across renders so React
+  // does NOT unmount/remount the <video> element — this prevents camera flickering.
+  const videoRefCallback = React.useCallback((node) => {
     videoElementRef.current = node;
     if (node && mediaStreamRef.current) {
       node.srcObject = mediaStreamRef.current;
     }
-  };
+  }, []); // empty deps — intentionally stable reference
   const activeAudioRef = useRef(null);
   const speechRecognizerRef = useRef(null);
   const audioContextRef = useRef(null);
