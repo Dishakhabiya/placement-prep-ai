@@ -21,7 +21,7 @@ ENV/
 *.sqlite3
 backend/placement_prep.db
 *.bak*
-backend/models/
+backend/models/**/checkpoint-*/
 backend/uploads/*
 !backend/uploads/.gitkeep
 backend/uploads/temp_audio/
