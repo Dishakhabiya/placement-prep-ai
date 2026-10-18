@@ -19,5 +19,8 @@ av<19
 opencv-python-headless>=4.10.0
 # Module 4: AI Visual frame analysis (Gemini Vision)
 google-generativeai>=0.7.0
+# Module 4: SBERT semantic answer quality (sentence-transformers)
+# Install manually on machines with enough RAM: pip install sentence-transformers
+# sentence-transformers>=2.7.0
 
 edge-tts>=7.0.0

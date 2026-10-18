@@ -129,6 +129,14 @@ class ChatMessageRequest(BaseModel):
     profile_id: str = Field(..., description="ID of the candidate profile to provide context")
     session_id: Optional[str] = Field(default=None, description="Chat session ID; if omitted, a new session is created")
     user_message: str = Field(..., min_length=1, description="User's chat input")
+    current_screen: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional hint: name of the screen the user is currently on "
+            "(e.g., 'Home', 'MatchSummary', 'Topics', 'MockInterview', 'PerformanceReport'). "
+            "Used as a relevance hint only — not treated as authoritative data."
+        )
+    )
 
 
 class SuggestedAction(BaseModel):

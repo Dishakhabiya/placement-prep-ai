@@ -312,7 +312,7 @@ export const apiClient = {
   /**
    * Feature 4: Chatbot API endpoints
    */
-  async sendChatMessage({ sessionId, profileId, userMessage }) {
+  async sendChatMessage({ sessionId, profileId, userMessage, currentScreen }) {
     try {
       const res = await fetchWithTimeout(
         `${API_BASE_URL}/api/chat/message`,
@@ -323,6 +323,7 @@ export const apiClient = {
             session_id: sessionId || null,
             profile_id: profileId,
             user_message: userMessage,
+            current_screen: currentScreen || null,
           }),
         },
         35000

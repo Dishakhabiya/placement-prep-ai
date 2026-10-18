@@ -39,7 +39,7 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  async sendMessage(profileId, userMessageText) {
+  async sendMessage(profileId, userMessageText, currentScreen) {
     if (!profileId || !userMessageText || !userMessageText.trim()) return;
 
     const trimmedMsg = userMessageText.trim();
@@ -66,6 +66,7 @@ export const useChatStore = create((set, get) => ({
         sessionId: currentSessionId,
         profileId,
         userMessage: trimmedMsg,
+        currentScreen: currentScreen || null,
       });
 
       if (response.error) {

@@ -55,7 +55,7 @@ export default function ChatbotScreen({ navigation }) {
     if (!inputText.trim() || isLoading || !profileId) return;
     const textToSend = inputText.trim();
     setInputText('');
-    sendMessage(profileId, textToSend);
+    sendMessage(profileId, textToSend, 'Chatbot');
   };
 
   const handleSelectAction = (action) => {
@@ -68,13 +68,13 @@ export default function ChatbotScreen({ navigation }) {
     } else if (action.action_type === 'practice_topic') {
       const topic = action.payload?.topic;
       if (topic) {
-        sendMessage(profileId, `How should I prepare for interview questions on ${topic}?`);
+        sendMessage(profileId, `How should I prepare for interview questions on ${topic}?`, 'Chatbot');
       } else {
         navigation.navigate('Topics');
       }
     } else if (action.action_type === 'ask_more') {
       const prompt = action.payload?.prompt || action.title;
-      sendMessage(profileId, prompt);
+      sendMessage(profileId, prompt, 'Chatbot');
     }
   };
 
@@ -156,19 +156,19 @@ export default function ChatbotScreen({ navigation }) {
             <View style={styles.promptSuggestions}>
               <TouchableOpacity
                 style={styles.suggestionCard}
-                onPress={() => sendMessage(profileId, 'What are my biggest skill gaps for this role?')}
+                onPress={() => sendMessage(profileId, 'What are my biggest skill gaps for this role?', 'Chatbot')}
               >
                 <Text style={styles.suggestionCardText}>🔍 "What are my biggest skill gaps for this role?"</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.suggestionCard}
-                onPress={() => sendMessage(profileId, 'Can you ask me a challenging interview question?')}
+                onPress={() => sendMessage(profileId, 'Can you ask me a challenging interview question?', 'Chatbot')}
               >
                 <Text style={styles.suggestionCardText}>🎯 "Can you ask me a challenging interview question?"</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.suggestionCard}
-                onPress={() => sendMessage(profileId, 'How should I explain my top project in an interview?')}
+                onPress={() => sendMessage(profileId, 'How should I explain my top project in an interview?', 'Chatbot')}
               >
                 <Text style={styles.suggestionCardText}>🚀 "How should I explain my top project in an interview?"</Text>
               </TouchableOpacity>
@@ -386,18 +386,23 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#FACC15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 1,
+    shadowColor: '#FACC15',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   sendBtnDisabled: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
   },
   sendBtnText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#000000',
     lineHeight: 20,
   },
   emptyContainer: {

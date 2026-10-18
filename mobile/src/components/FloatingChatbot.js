@@ -80,7 +80,7 @@ export default function FloatingChatbot({ navigationRef, currentRoute }) {
     }
 
     setInputText('');
-    sendMessage(profileId, textToSend);
+    sendMessage(profileId, textToSend, currentRoute);
   };
 
   const handleSelectAction = (action) => {
@@ -95,7 +95,7 @@ export default function FloatingChatbot({ navigationRef, currentRoute }) {
     } else if (action.action_type === 'practice_topic') {
       const topic = action.payload?.topic;
       if (topic && profileId) {
-        sendMessage(profileId, `How should I prepare for interview questions on ${topic}?`);
+        sendMessage(profileId, `How should I prepare for interview questions on ${topic}?`, currentRoute);
       } else {
         setIsOpen(false);
         navigationRef?.navigate('Topics');
@@ -103,7 +103,7 @@ export default function FloatingChatbot({ navigationRef, currentRoute }) {
     } else if (action.action_type === 'ask_more') {
       const prompt = action.payload?.prompt || action.title;
       if (profileId) {
-        sendMessage(profileId, prompt);
+        sendMessage(profileId, prompt, currentRoute);
       }
     }
   };
@@ -229,21 +229,21 @@ export default function FloatingChatbot({ navigationRef, currentRoute }) {
                 <View style={styles.quickPromptsContainer}>
                   <TouchableOpacity
                     style={styles.quickPromptChip}
-                    onPress={() => sendMessage(profileId, 'What are my biggest skill gaps for this job?')}
+                    onPress={() => sendMessage(profileId, 'What are my biggest skill gaps for this job?', currentRoute)}
                   >
                     <Text style={styles.quickPromptIcon}>⚡</Text>
                     <Text style={styles.quickPromptText}>What are my top skill gaps?</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.quickPromptChip}
-                    onPress={() => sendMessage(profileId, 'Give me top interview preparation tips')}
+                    onPress={() => sendMessage(profileId, 'Give me top interview preparation tips', currentRoute)}
                   >
                     <Text style={styles.quickPromptIcon}>🎯</Text>
                     <Text style={styles.quickPromptText}>Top interview prep tips</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.quickPromptChip}
-                    onPress={() => sendMessage(profileId, 'How is my resume match score?')}
+                    onPress={() => sendMessage(profileId, 'How is my resume match score?', currentRoute)}
                   >
                     <Text style={styles.quickPromptIcon}>📊</Text>
                     <Text style={styles.quickPromptText}>Review my resume match score</Text>

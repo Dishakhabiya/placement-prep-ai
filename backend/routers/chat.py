@@ -102,7 +102,8 @@ def post_chat_message(
     engine_response = generate_chat_response(
         profile=profile_obj,
         history=history_dicts,
-        user_message=request.user_message
+        user_message=request.user_message,
+        current_screen=getattr(request, "current_screen", None),
     )
 
     # 6. Save assistant message to database
