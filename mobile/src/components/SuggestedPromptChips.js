@@ -40,9 +40,9 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#FDE047',
     borderRadius: 20,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#1D4ED8',
+    fontWeight: '700',
+    color: '#854D0E',
   },
 });

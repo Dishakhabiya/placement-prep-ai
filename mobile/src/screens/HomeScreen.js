@@ -311,7 +311,7 @@ export default function HomeScreen({ navigation }) {
 
           <View style={styles.mockCalloutRight}>
             <Image
-              source={Caricatures.homeMockCallout || Caricatures.aiInterviewer}
+              source={Caricatures.mockInterviewHeadset || Caricatures.laptopHeadset}
               style={styles.mockCalloutImg}
               resizeMode="contain"
             />

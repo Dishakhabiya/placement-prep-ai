@@ -23,6 +23,40 @@ export default function ChatBubble({ message }) {
     return message.model || 'AI Coach';
   };
 
+  const renderFormattedContent = (content) => {
+    if (!content) return null;
+    const lines = content.split('\n');
+
+    return lines.map((line, lineIdx) => {
+      let cleanLine = line;
+      // Convert list asterisks (* item or - item) into clean bullet (• item)
+      if (/^\s*[\*\-]\s+/.test(cleanLine)) {
+        cleanLine = cleanLine.replace(/^\s*[\*\-]\s+/, '• ');
+      }
+
+      // Split by double asterisks **bold**
+      const parts = cleanLine.split(/(\*\*[^*]+\*\*)/g);
+
+      return (
+        <Text key={`line-${lineIdx}`} style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+          {parts.map((part, partIdx) => {
+            if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+              const inner = part.slice(2, -2);
+              return (
+                <Text key={`bold-${partIdx}`} style={[styles.boldText, isUser ? styles.userBoldText : styles.assistantBoldText]}>
+                  {inner}
+                </Text>
+              );
+            }
+            // Remove any leftover stray asterisks
+            return part.replace(/\*/g, '');
+          })}
+          {lineIdx < lines.length - 1 ? '\n' : ''}
+        </Text>
+      );
+    });
+  };
+
   return (
     <View style={[styles.bubbleContainer, isUser ? styles.userContainer : styles.assistantContainer]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
@@ -49,9 +83,9 @@ export default function ChatBubble({ message }) {
           </View>
         )}
 
-        <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-          {message.content}
-        </Text>
+        <View style={styles.messageContentBox}>
+          {renderFormattedContent(message.content)}
+        </View>
 
         <Text style={[styles.timeText, isUser ? styles.userTimeText : styles.assistantTimeText]}>
           {formatTime(message.created_at)}
@@ -85,8 +119,10 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   userBubble: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#0F172A',
     borderBottomRightRadius: 4,
+    borderWidth: 1,
+    borderColor: '#1E293B',
   },
   assistantBubble: {
     backgroundColor: '#FFFFFF',
@@ -104,8 +140,8 @@ const styles = StyleSheet.create({
   },
   avatarLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: '800',
+    color: '#0F172A',
   },
   modelBadge: {
     paddingHorizontal: 6,
@@ -113,14 +149,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   nemotronBadge: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
     borderWidth: 0.5,
   },
   nemotronBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#065F46',
+    fontWeight: '800',
+    color: '#854D0E',
   },
   fallbackBadge: {
     backgroundColor: '#FFFBEB',
@@ -143,14 +179,28 @@ const styles = StyleSheet.create({
     color: '#C2410C',
   },
   messageText: {
-    fontSize: 14.5,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20.5,
+  },
+  boldText: {
+    fontWeight: '700',
+  },
+  userBoldText: {
+    color: '#FDE047',
+    fontWeight: '700',
+  },
+  assistantBoldText: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  messageContentBox: {
+    width: '100%',
   },
   userText: {
     color: '#FFFFFF',
   },
   assistantText: {
-    color: '#1F2937',
+    color: '#111827',
   },
   timeText: {
     fontSize: 10,
@@ -158,7 +208,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   userTimeText: {
-    color: '#DBEAFE',
+    color: '#FACC15',
   },
   assistantTimeText: {
     color: '#9CA3AF',

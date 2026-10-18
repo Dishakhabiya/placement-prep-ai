@@ -42,6 +42,7 @@ export const Caricatures = {
   completedCelebrationTransparent: require('./completed_celebration_transparent.png'),
   homeHeroResumeJd: require('./home_hero_resume_jd.png'),
   homeMockCallout: require('./home_mock_callout.png'),
+  mockInterviewHeadset: require('./mock_interview_headset.png'),
 };
 
 export default Caricatures;
