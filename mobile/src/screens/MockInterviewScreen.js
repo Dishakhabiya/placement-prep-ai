@@ -116,6 +116,7 @@ export default function MockInterviewScreen({ navigation }) {
   const answerTimerIntervalRef = useRef(null);
   const feedbackTimeoutRef = useRef(null);
   const isFinalizingRef = useRef(false);
+  const isSessionEndedRef = useRef(false);
 
   // Hidden canvas for video frame capture (injected into DOM)
   const ensureCanvas = () => {
@@ -223,10 +224,12 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Initialize camera and fetch questions on mount
   useEffect(() => {
+    isSessionEndedRef.current = false;
     fetchQuestionSet();
     initializeWebcam();
 
     return () => {
+      isSessionEndedRef.current = true;
       clearAllTimers();
       cancelAudio();
       stopSpeechRecognition();
@@ -337,6 +340,8 @@ export default function MockInterviewScreen({ navigation }) {
   const cancelAudio = () => {
     if (activeAudioRef.current) {
       try {
+        activeAudioRef.current.onended = null;
+        activeAudioRef.current.onerror = null;
         activeAudioRef.current.pause();
         activeAudioRef.current.src = '';
       } catch (e) {}
@@ -588,6 +593,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Phase 1: 10-Second Preparation Phase
   const startPreparationPhase = (index, questionList = (questionsRef.current.length > 0 ? questionsRef.current : questions)) => {
+    if (isSessionEndedRef.current) return;
     clearAllTimers();
     cancelAudio();
     stopSpeechRecognition();
@@ -633,6 +639,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Phase 2: 3-Second Recording Countdown
   const startRecordingCountdown = () => {
+    if (isSessionEndedRef.current) return;
     clearAllTimers();
     setInterviewPhase('countdown');
     setCountdownRemaining(3);
@@ -652,6 +659,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Phase 3: Active Recording (3-Minute Max Duration)
   const startActiveRecording = () => {
+    if (isSessionEndedRef.current) return;
     clearAllTimers();
     setInterviewPhase('recording');
     setRecordingDuration(0);
@@ -759,7 +767,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Finalize current answer, analyze feedback, speak mistakes aloud, and advance
   const finalizeAndSaveAnswer = async () => {
-    if (isFinalizingRef.current) return;
+    if (isSessionEndedRef.current || isFinalizingRef.current) return;
     isFinalizingRef.current = true;
     clearAllTimers();
     stopSpeechRecognition();
@@ -1219,6 +1227,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Advance to next question or complete session
   const advanceToNextQuestionOrComplete = () => {
+    if (isSessionEndedRef.current) return;
     clearAllTimers();
     cancelAudio();
     stopSpeechRecognition();
@@ -1235,6 +1244,7 @@ export default function MockInterviewScreen({ navigation }) {
 
   // Interview Completed
   const handleCompleteInterview = () => {
+    isSessionEndedRef.current = true;
     clearAllTimers();
     cancelAudio();
     stopSpeechRecognition();
@@ -1248,8 +1258,20 @@ export default function MockInterviewScreen({ navigation }) {
     setShowEndConfirmation(true);
   };
 
+  // Return to Home cleanly from interview
+  const handleReturnHome = () => {
+    isSessionEndedRef.current = true;
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+    stopWebcamTracks();
+    exitFullscreenIfActive();
+    navigation.navigate('Home');
+  };
+
   // Candidate confirms End Interview early
   const handleConfirmEndInterview = async () => {
+    isSessionEndedRef.current = true;
     setShowEndConfirmation(false);
     clearAllTimers();
     cancelAudio();
@@ -1325,8 +1347,15 @@ export default function MockInterviewScreen({ navigation }) {
     setInterviewPhase('completed');
   };
 
-  // Navigate to Performance Report Screen
+  // Navigate to Performance Report Screen (using replace so MockInterview doesn't linger in stack)
   const handleNavigateToReport = () => {
+    isSessionEndedRef.current = true;
+    clearAllTimers();
+    cancelAudio();
+    stopSpeechRecognition();
+    stopWebcamTracks();
+    exitFullscreenIfActive();
+
     const currentQuestions = questionsRef.current.length > 0 ? questionsRef.current : questions;
     const mainQuestions = currentQuestions.filter((q) => !q.is_followup);
 
@@ -1347,7 +1376,7 @@ export default function MockInterviewScreen({ navigation }) {
       };
     });
 
-    navigation.navigate('PerformanceReport', {
+    navigation.replace('PerformanceReport', {
       sessionAnswers: sessionAnswersArray,
       questions: mainQuestions,
       profile: currentProfile,
@@ -1874,40 +1903,70 @@ export default function MockInterviewScreen({ navigation }) {
             </div>
           </div>
 
-          {/* Action CTA Button */}
-          <button
-            onClick={handleNavigateToReport}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              backgroundColor: '#3B82F6',
-              backgroundImage: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
-              color: '#FFFFFF',
-              fontSize: 16,
-              fontWeight: '700',
-              padding: '14px 38px',
-              borderRadius: 9999,
-              border: 'none',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px -4px rgba(37, 99, 235, 0.4)',
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 12px 28px -4px rgba(37, 99, 235, 0.5)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 8px 24px -4px rgba(37, 99, 235, 0.4)';
-            }}
-          >
-            <span>View Performance Report</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="12 5 19 12 12 19" />
-            </svg>
-          </button>
+          {/* Action CTA Buttons */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              onClick={handleNavigateToReport}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                backgroundColor: '#3B82F6',
+                backgroundImage: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
+                color: '#FFFFFF',
+                fontSize: 16,
+                fontWeight: '700',
+                padding: '14px 34px',
+                borderRadius: 9999,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px -4px rgba(37, 99, 235, 0.4)',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 12px 28px -4px rgba(37, 99, 235, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 8px 24px -4px rgba(37, 99, 235, 0.4)';
+              }}
+            >
+              <span>View Performance Report</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </button>
+
+            <button
+              onClick={handleReturnHome}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: '#F8FAFC',
+                color: '#334155',
+                fontSize: 16,
+                fontWeight: '600',
+                padding: '14px 28px',
+                borderRadius: 9999,
+                border: '1px solid #CBD5E1',
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease, transform 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#E2E8F0';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <span>🏠 Return Home</span>
+            </button>
+          </div>
         </main>
       </div>
     );

@@ -94,7 +94,7 @@ export default function App() {
           <Stack.Screen
             name="PerformanceReport"
             component={PerformanceReportScreen}
-            options={{ title: 'Session Performance Report' }}
+            options={{ title: 'Session Performance Report', headerBackVisible: false }}
           />
           <Stack.Screen
             name="Chatbot"

@@ -315,8 +315,8 @@ export default function PerformanceReportScreen({ route, navigation }) {
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorTitle}>Could Not Load Session Report</Text>
           <Text style={styles.errorSub}>{error || 'Session report data is unavailable.'}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.primaryBtnText}>← Return to Interview</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Home')}>
+            <Text style={styles.primaryBtnText}>← Return to Home</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -343,8 +343,8 @@ export default function PerformanceReportScreen({ route, navigation }) {
               You concluded the interview session without recording answers to the questions.
               To generate an aggregated performance score, record and submit at least one spoken response.
             </Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.primaryBtnText}>🎥 Return to Mock Interview</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Home')}>
+              <Text style={styles.primaryBtnText}>🏠 Return to Home</Text>
             </TouchableOpacity>
           </View>
 
