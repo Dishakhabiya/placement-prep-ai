@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 import spacy
 from module1.ner.labels import ENTITY_TYPES
 from module1.matching.normalize import _TAXONOMY, _ALIASES, _LOWER_TO_CANONICAL, normalize_skill, normalize_skill_list
@@ -127,7 +127,7 @@ def _clean_hf_word(word: str) -> str:
     return word
 
 
-def _resolve_to_canonical(word: str, group: str) -> str | None:
+def _resolve_to_canonical(word: str, group: str) -> Optional[str]:
     """
     Tries to resolve a (possibly lowercased/fragmented) word back to its
     canonical taxonomy form.
