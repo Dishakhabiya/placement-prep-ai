@@ -42,6 +42,9 @@ def aggregate_session_report(
     # 1. Accumulate metrics across answered questions
     relevance_scores: List[float] = []
     coverage_scores: List[float] = []
+    semantic_coverage_scores: List[float] = []
+    semantic_similarities: List[float] = []
+    sbert_model_used: Optional[str] = None
     total_covered_concepts = 0
     total_missing_concepts = 0
 
@@ -123,6 +126,22 @@ def aggregate_session_report(
             if "face_centering_ratio" in vis:
                 face_centering_ratios.append(float(vis["face_centering_ratio"]))
 
+        # SBERT Semantic Quality Metrics
+        sq = ev.get("semantic_quality")
+        if isinstance(sq, dict):
+            if "semantic_coverage_score" in sq:
+                try:
+                    semantic_coverage_scores.append(float(sq["semantic_coverage_score"]))
+                except (ValueError, TypeError):
+                    pass
+            if "avg_similarity" in sq:
+                try:
+                    semantic_similarities.append(float(sq["avg_similarity"]))
+                except (ValueError, TypeError):
+                    pass
+            if not sbert_model_used and sq.get("model_used"):
+                sbert_model_used = str(sq.get("model_used"))
+
     # 2. Compute Aggregates
     if total_words_spoken == 0:
         avg_relevance = 0.0
@@ -130,6 +149,17 @@ def aggregate_session_report(
     else:
         avg_relevance = round(sum(relevance_scores) / len(relevance_scores), 1) if relevance_scores else 0.0
         avg_coverage = round(sum(coverage_scores) / len(coverage_scores), 1) if coverage_scores else 0.0
+
+    avg_sem_coverage = (
+        round(sum(semantic_coverage_scores) / len(semantic_coverage_scores), 1)
+        if semantic_coverage_scores
+        else None
+    )
+    avg_sem_similarity = (
+        round(sum(semantic_similarities) / len(semantic_similarities), 3)
+        if semantic_similarities
+        else None
+    )
 
     # Overall WPM: prefer overall total words / duration, or average of WPM list
     if total_words_spoken == 0:
@@ -240,6 +270,8 @@ def aggregate_session_report(
             strengths.append(f"Clean speech delivery with very low filler usage ({overall_filler_pct}%).")
         if avg_face_presence is not None and avg_face_presence >= 80.0 and not has_posture_issue:
             strengths.append(f"Consistent camera framing presence ({avg_face_presence}%) throughout the session.")
+        if avg_sem_coverage is not None and avg_sem_coverage >= 70.0:
+            strengths.append(f"Strong semantic answer depth ({avg_sem_coverage}% SBERT coverage) — effectively articulated core concepts in original phrasing.")
         if answered_count == total_q_count and total_q_count > 0 and avg_relevance >= 45.0:
             strengths.append(f"Full session completion ({answered_count}/{total_q_count} questions answered substantively).")
 
@@ -352,10 +384,15 @@ def aggregate_session_report(
                 meta = ev.get("transcript_metadata", {})
                 deliv = ev.get("delivery_metrics", {}) or {}
                 vis = ev.get("visual_metrics", {}) or {}
+                sq = ev.get("semantic_quality", {}) or {}
 
                 words_cnt = int(meta.get("word_count", 0))
                 q_transcript = meta.get("transcript", "")
                 is_q_answered = words_cnt >= 3 and bool(q_transcript.strip())
+
+                sem_cov = float(sq["semantic_coverage_score"]) if (is_q_answered and "semantic_coverage_score" in sq) else None
+                sem_sim = float(sq["avg_similarity"]) if (is_q_answered and "avg_similarity" in sq) else None
+                sem_covered = sq.get("semantically_covered", []) if is_q_answered else []
 
                 breakdown.append(
                     QuestionReportItem(
@@ -368,8 +405,11 @@ def aggregate_session_report(
                         transcript=q_transcript if is_q_answered else None,
                         relevance_score=float(rel.get("relevance_score", 0.0)) if (is_q_answered and "relevance_score" in rel) else None,
                         coverage_score=float(cov.get("coverage_score", 0.0)) if (is_q_answered and "coverage_score" in cov) else None,
+                        semantic_coverage_score=sem_cov,
+                        semantic_similarity=sem_sim,
                         covered_concepts=cov.get("covered_concepts", []) if is_q_answered else [],
                         missing_concepts=cov.get("missing_concepts", []),
+                        semantically_covered=sem_covered,
                         words_per_minute=float(deliv.get("words_per_minute")) if (is_q_answered and deliv.get("words_per_minute") is not None) else None,
                         filler_word_count=int(deliv.get("total_filler_words", 0)) if "total_filler_words" in deliv else None,
                         extended_pause_count=int(deliv.get("extended_pause_count", 0)) if "extended_pause_count" in deliv else None,
@@ -403,6 +443,11 @@ def aggregate_session_report(
             meta = ev.get("transcript_metadata", {})
             deliv = ev.get("delivery_metrics", {}) or {}
             vis = ev.get("visual_metrics", {}) or {}
+            sq = ev.get("semantic_quality", {}) or {}
+
+            sem_cov = float(sq["semantic_coverage_score"]) if "semantic_coverage_score" in sq else None
+            sem_sim = float(sq["avg_similarity"]) if "avg_similarity" in sq else None
+            sem_covered = sq.get("semantically_covered", [])
 
             breakdown.append(
                 QuestionReportItem(
@@ -413,8 +458,11 @@ def aggregate_session_report(
                     transcript=meta.get("transcript", ""),
                     relevance_score=float(rel.get("relevance_score", 0.0)) if "relevance_score" in rel else None,
                     coverage_score=float(cov.get("coverage_score", 0.0)) if "coverage_score" in cov else None,
+                    semantic_coverage_score=sem_cov,
+                    semantic_similarity=sem_sim,
                     covered_concepts=cov.get("covered_concepts", []),
                     missing_concepts=cov.get("missing_concepts", []),
+                    semantically_covered=sem_covered,
                     words_per_minute=float(deliv.get("words_per_minute")) if deliv.get("words_per_minute") is not None else None,
                     filler_word_count=int(deliv.get("total_filler_words", 0)) if "total_filler_words" in deliv else None,
                     extended_pause_count=int(deliv.get("extended_pause_count", 0)) if "extended_pause_count" in deliv else None,
@@ -435,6 +483,9 @@ def aggregate_session_report(
         readiness_level=readiness_tier,
         average_relevance_score=avg_relevance,
         average_concept_coverage=avg_coverage,
+        average_semantic_coverage=avg_sem_coverage,
+        average_semantic_similarity=avg_sem_similarity,
+        sbert_model_used=sbert_model_used,
         total_concepts_covered=total_covered_concepts,
         total_concepts_missing=total_missing_concepts,
         average_words_per_minute=avg_wpm,

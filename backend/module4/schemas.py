@@ -38,8 +38,11 @@ class QuestionReportItem(BaseModel):
     transcript: Optional[str] = Field(default=None, description="Candidate transcript text")
     relevance_score: Optional[float] = Field(default=None, description="Relevance score (0-100)")
     coverage_score: Optional[float] = Field(default=None, description="Concept coverage score (0-100)")
+    semantic_coverage_score: Optional[float] = Field(default=None, description="SBERT semantic coverage score (0-100)")
+    semantic_similarity: Optional[float] = Field(default=None, description="SBERT average cosine similarity")
     covered_concepts: List[str] = Field(default_factory=list, description="Concepts matched")
     missing_concepts: List[str] = Field(default_factory=list, description="Concepts missed")
+    semantically_covered: List[str] = Field(default_factory=list, description="Concepts matched via SBERT embeddings")
     words_per_minute: Optional[float] = Field(default=None, description="Speaking pace in WPM")
     filler_word_count: Optional[int] = Field(default=None, description="Filler words in answer")
     extended_pause_count: Optional[int] = Field(default=None, description="Extended pauses in answer")
@@ -65,6 +68,9 @@ class SessionReportResponse(BaseModel):
     # Core Aggregated Metrics
     average_relevance_score: float = Field(default=0.0, description="Mean answer relevance score (0-100%)")
     average_concept_coverage: float = Field(default=0.0, description="Mean expected concept coverage (0-100%)")
+    average_semantic_coverage: Optional[float] = Field(default=None, description="Mean SBERT semantic coverage score (0-100%)")
+    average_semantic_similarity: Optional[float] = Field(default=None, description="Mean SBERT cosine similarity across concept pairs")
+    sbert_model_used: Optional[str] = Field(default=None, description="SBERT model identifier used for evaluation")
     total_concepts_covered: int = Field(default=0, description="Total expected concepts satisfied across answers")
     total_concepts_missing: int = Field(default=0, description="Total expected concepts missed across answers")
     

@@ -20,6 +20,8 @@ ENV/
 *.db
 *.sqlite3
 backend/placement_prep.db
+*.bak*
+backend/models/
 backend/uploads/*
 !backend/uploads/.gitkeep
 backend/uploads/temp_audio/
