@@ -144,7 +144,7 @@ export const apiClient = {
     return data;
   },
 
-  async generateFollowup({ questionId, originalQuestion, targetTopic, candidateAnswer, missingConcepts }) {
+  async generateFollowup({ questionId, originalQuestion, targetTopic, candidateAnswer, missingConcepts, jobContext }) {
     const res = await fetchWithTimeout(`${API_BASE_URL}/api/questions/followup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,6 +154,7 @@ export const apiClient = {
         target_topic: targetTopic || '',
         candidate_answer: candidateAnswer,
         missing_concepts: missingConcepts || [],
+        job_context: jobContext || null,
       }),
     });
     const data = await res.json();

@@ -942,7 +942,9 @@ export default function MockInterviewScreen({ navigation }) {
       let followupData = null;
 
       if (shouldProbeFollowup) {
-        setEvaluatingStatusText('Generating adaptive follow-up question...');
+        const jobCtx = currentProfile?.job?.title
+          ? `${currentProfile.job.title}${currentProfile.job.responsibilities?.[0] ? ` - ${currentProfile.job.responsibilities[0]}` : ''}`
+          : '';
         try {
           followupData = await apiClient.generateFollowup({
             questionId: currentQ.question_id,
@@ -950,6 +952,7 @@ export default function MockInterviewScreen({ navigation }) {
             targetTopic: currentQ.target_topic || '',
             candidateAnswer: finalTranscript,
             missingConcepts: missingConcepts,
+            jobContext: jobCtx,
           });
         } catch (fErr) {
           console.warn('Adaptive follow-up generation failed, proceeding with standard feedback:', fErr);
@@ -1113,39 +1116,100 @@ export default function MockInterviewScreen({ navigation }) {
 
     const relevance = evaluation?.relevance?.relevance_score ?? 75;
     const coverage = evaluation?.concept_coverage?.coverage_score ?? 70;
+    const coveredConcepts = evaluation?.concept_coverage?.covered_concepts || [];
     const missingConcepts = evaluation?.concept_coverage?.missing_concepts || [];
-    const fillers = evaluation?.delivery?.filler_words?.total_fillers ?? 0;
+    const fillers =
+      evaluation?.delivery?.filler_words?.total_fillers ??
+      evaluation?.delivery_metrics?.total_filler_words ??
+      0;
+    const wpm =
+      evaluation?.delivery_metrics?.words_per_minute ??
+      evaluation?.delivery?.pacing?.wpm ??
+      0;
+    const category = (question?.category || 'technical').toLowerCase();
+    const topic = question?.target_topic || '';
+    const isHr = category === 'hr' || category === 'behavioral';
 
+    // 1. Follow-up Question Answer Evaluation
     if (question?.is_followup) {
       if (relevance >= 75 && coverage >= 70) {
-        parts.push('Well done! That clarifies the concept nicely.');
+        if (coveredConcepts.length > 0) {
+          parts.push(`Well done! You clarified ${coveredConcepts.slice(0, 2).join(' and ')} effectively.`);
+        } else {
+          parts.push('Great job expanding on that concept.');
+        }
       } else {
-        parts.push('Thank you for providing more detail on that concept.');
+        if (missingConcepts.length > 0) {
+          parts.push(`Thank you for adding details. Moving forward, keep in mind to also address ${missingConcepts[0]}.`);
+        } else {
+          parts.push('Thank you for providing that additional context.');
+        }
       }
       parts.push('Now, moving to your next question.');
       return parts.join(' ');
     }
 
-    if (relevance >= 80 && coverage >= 80) {
-      parts.push('Great job! That was a strong, well-structured answer.');
-    } else if (relevance < 65) {
-      parts.push('Your answer deviated somewhat from the core question.');
+    // 2. Main Question: Content & Structural Evaluation
+    if (isHr) {
+      // HR & Behavioural coaching
+      if (coverage >= 75 && relevance >= 75) {
+        if (coveredConcepts.length > 0) {
+          parts.push(`Strong behavioural response! You effectively demonstrated ${coveredConcepts.slice(0, 2).join(' and ')}.`);
+        } else {
+          parts.push(`Strong behavioural answer with clear context for ${topic || 'the scenario'}.`);
+        }
+      } else if (relevance < 60) {
+        parts.push(`Your answer drifted away from the specific behavioural scenario requested in ${topic || 'this question'}.`);
+      } else {
+        if (coveredConcepts.length > 0) {
+          parts.push(`You touched on ${coveredConcepts.slice(0, 2).join(' and ')}, but the story lacked a concrete resolution.`);
+        } else {
+          parts.push('Good attempt, but your response needs a clearer narrative structure.');
+        }
+      }
+
+      // Actionable HR Tip
+      if (missingConcepts.length > 0) {
+        parts.push(`To stand out, frame your story using the STAR method (Situation, Task, Action, Result) and clearly highlight ${missingConcepts.slice(0, 2).join(' and ')}.`);
+      }
     } else {
-      parts.push('Good attempt, but here are key areas for improvement.');
+      // Technical & JD-based coaching
+      if (coverage >= 80 && relevance >= 80) {
+        if (coveredConcepts.length > 0) {
+          parts.push(`Excellent technical breakdown covering ${coveredConcepts.slice(0, 2).join(' and ')}.`);
+        } else {
+          parts.push(`Strong technical explanation for ${topic || 'this question'}.`);
+        }
+      } else if (relevance < 65) {
+        parts.push(`Your response didn't directly target the core principles of ${topic || 'this question'}.`);
+      } else {
+        if (coveredConcepts.length > 0) {
+          parts.push(`Good start addressing ${coveredConcepts.slice(0, 2).join(' and ')}, but important technical depth was omitted.`);
+        } else {
+          parts.push(`Your answer covers the general idea, but lacks technical depth for ${topic || 'this question'}.`);
+        }
+      }
+
+      // Actionable Technical Tip
+      if (missingConcepts.length > 0) {
+        parts.push(`In a technical interview, be sure to explicitly discuss ${missingConcepts.slice(0, 2).join(' and ')} and the production tradeoffs.`);
+      }
     }
 
-    if (missingConcepts.length > 0) {
-      const topMissing = missingConcepts.slice(0, 2).join(' and ');
-      parts.push(`You missed critical concepts: ${topMissing}. Be sure to address these.`);
+    // 3. Speech Delivery & Pacing Feedback
+    if (fillers >= 4) {
+      parts.push(`You used ${fillers} filler words—practice pausing quietly while formulating your thoughts.`);
+    }
+    if (wpm > 175) {
+      parts.push(`Your delivery pace of ${wpm} WPM was on the faster side; slowing down slightly will improve comprehension.`);
+    } else if (wpm > 0 && wpm < 85) {
+      parts.push(`Your speaking pace was ${wpm} WPM; speaking with slightly more momentum will convey stronger confidence.`);
     }
 
-    if (fillers > 4) {
-      parts.push(`You used ${fillers} filler words. Aim to pause calmly instead of using fillers.`);
-    }
-
+    // 4. Next Step Transition
     if (followupData) {
       const focusText = followupData.focus_area ? ` on ${followupData.focus_area}` : '';
-      parts.push(`Let's explore this further with an adaptive follow-up question${focusText}.`);
+      parts.push(`Let's dive into that with a quick adaptive follow-up question${focusText}.`);
     } else {
       parts.push('Now, moving to your next question.');
     }
@@ -2008,18 +2072,24 @@ export default function MockInterviewScreen({ navigation }) {
           <View style={styles.imgQuestionOverlayCard}>
             <View style={styles.imgQuestionCardTopRow}>
               <View style={styles.imgQuestionNumberBadgeRow}>
-                <Text style={styles.imgChatBubbleIcon}>{currentQ?.is_followup ? '⚡' : '💬'}</Text>
+                <Text style={styles.imgChatBubbleIcon}>
+                  {interviewPhase === 'feedback' ? '🎯' : (currentQ?.is_followup ? '⚡' : '💬')}
+                </Text>
                 <Text style={styles.imgQuestionNumberText}>
-                  {currentQ?.is_followup
-                    ? `ADAPTIVE FOLLOW-UP • Q${displayMainIndex}`
-                    : `QUESTION ${displayMainIndex}/${totalCount}`}
+                  {interviewPhase === 'feedback'
+                    ? 'COACHING FEEDBACK'
+                    : (currentQ?.is_followup
+                        ? `ADAPTIVE FOLLOW-UP • Q${displayMainIndex}`
+                        : `QUESTION ${displayMainIndex}/${totalCount}`)}
                 </Text>
               </View>
               <View style={[styles.imgDifficultyBadge, currentQ?.is_followup && styles.imgFollowupBadge]}>
                 <Text style={[styles.imgDifficultyBadgeText, currentQ?.is_followup && styles.imgFollowupBadgeText]}>
-                  {currentQ?.is_followup
-                    ? (currentQ.focus_area ? `Focus: ${currentQ.focus_area}` : 'Follow-up')
-                    : (String(currentQ?.difficulty || 'Medium').charAt(0).toUpperCase() + String(currentQ?.difficulty || 'Medium').slice(1).toLowerCase())}
+                  {interviewPhase === 'feedback'
+                    ? 'Instant Analysis'
+                    : (currentQ?.is_followup
+                        ? (currentQ.focus_area ? `Focus: ${currentQ.focus_area}` : 'Follow-up')
+                        : (String(currentQ?.difficulty || 'Medium').charAt(0).toUpperCase() + String(currentQ?.difficulty || 'Medium').slice(1).toLowerCase()))}
                 </Text>
               </View>
             </View>

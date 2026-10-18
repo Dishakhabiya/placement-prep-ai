@@ -111,6 +111,7 @@ class FollowupRequest(BaseModel):
     target_topic: str = Field(default="", description="Topic of original question")
     candidate_answer: str = Field(..., description="Transcribed or typed candidate response")
     missing_concepts: List[str] = Field(default_factory=list, description="Concepts missing from candidate response")
+    job_context: Optional[str] = Field(default=None, description="Optional JD role/context to tie follow-up directly to job requirements")
 
 
 class FollowupResponse(BaseModel):
