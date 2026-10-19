@@ -166,12 +166,17 @@ export default function MockInterviewScreen({ navigation }) {
       const result = await apiClient.analyzeInterviewFrame(base64Frame);
       if (result && result.overall_alert && result.alert_message) {
         const severity = result.posture === 'lying_down' ? 'critical' : 'warning';
-        setVisualAlert({ message: result.alert_message, severity, type: result.posture === 'lying_down' ? 'posture' : result.attire === 'informal' ? 'attire' : result.background === 'extra_people' ? 'background' : 'eye_contact' });
+        const alertType = result.posture === 'lying_down' ? 'posture'
+          : result.background === 'extra_people' ? 'background'
+          : result.eye_contact === 'poor' ? 'eye_contact'
+          : result.attire === 'informal' ? 'attire'
+          : 'general';
+        setVisualAlert({ message: result.alert_message, severity, type: alertType });
         // Accumulate issue for final report
         setSessionVisualIssues(prev => {
-          const isDupe = prev.some(p => p.type === (result.posture === 'lying_down' ? 'posture' : 'other') && Date.now() - p.ts < 30000);
+          const isDupe = prev.some(p => p.type === alertType && Date.now() - p.ts < 20000);
           if (isDupe) return prev;
-          return [...prev, { message: result.alert_message, severity, ts: Date.now(), posture: result.posture, attire: result.attire, eye_contact: result.eye_contact, background: result.background }];
+          return [...prev, { message: result.alert_message, severity, type: alertType, ts: Date.now(), posture: result.posture, attire: result.attire, eye_contact: result.eye_contact, background: result.background }];
         });
         // Auto-dismiss warning after 6 seconds
         setTimeout(() => setVisualAlert(null), 6000);
@@ -181,15 +186,15 @@ export default function MockInterviewScreen({ navigation }) {
     }
   };
 
-  // Start periodic frame analysis during recording
+  // Start periodic frame analysis during interview
   const startFrameAnalysis = () => {
     stopFrameAnalysis();
-    // First check after 3s, then every 8s
+    // First check after 1.5s, then every 5s
     frameAnalysisIntervalRef.current = setInterval(() => {
       runFrameAnalysis();
-    }, 8000);
+    }, 5000);
     // Run first check immediately after short delay
-    setTimeout(() => runFrameAnalysis(), 3000);
+    setTimeout(() => runFrameAnalysis(), 1500);
   };
 
   const stopFrameAnalysis = () => {
@@ -610,6 +615,9 @@ export default function MockInterviewScreen({ navigation }) {
     if (q && q.question_text) {
       speakTextWithNeuralVoice(q.question_text, null, q.question_id);
     }
+
+    // Start AI visual monitoring early during question prep
+    startFrameAnalysis();
 
     prepIntervalRef.current = setInterval(() => {
       setPrepTimeRemaining((prev) => {

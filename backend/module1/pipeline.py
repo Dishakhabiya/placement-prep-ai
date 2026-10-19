@@ -29,8 +29,85 @@ def _is_glyph_or_artifact(text: str) -> bool:
     return False
 
 
+def _is_invalid_project_title(title: str, current_proj_title: str = None) -> bool:
+    """
+    Returns True if the line cannot be a valid standalone project title:
+    e.g., date ranges, links, action verb sentence fragments, sub-platform tags, or tech stack lines.
+    """
+    if not title:
+        return True
+
+    clean = title.strip()
+    clean_lower = clean.lower()
+
+    # 1. Date ranges or temporal keywords (e.g. 'Sep 2025 - Present', '2023 - 2024', 'Jan 2022 - Dec 2022')
+    date_pattern = r"(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—to/]+\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4}|present|current|ongoing)"
+    if re.search(date_pattern, clean_lower):
+        return True
+    if re.match(r"^(?:present|ongoing|current|\d{4})$", clean_lower):
+        return True
+    if re.search(r"^\d{1,2}/\d{4}\s*[-–—]\s*(?:\d{1,2}/\d{4}|present)", clean_lower):
+        return True
+
+    # 2. Links, store references, repository keywords
+    link_keywords = {
+        "testflight", "test flight", "app store", "appstore", "play store", "playstore",
+        "google play", "github", "gitlab", "bitbucket", "live demo", "demo", "link",
+        "website", "preview", "source code", "repo", "repository", "apk", "url"
+    }
+    unbracketed = re.sub(r"[\[\]\(\)\:\-–—|]", " ", clean_lower).strip()
+    unbracketed = re.sub(r"\s+", " ", unbracketed)
+    if unbracketed in link_keywords or unbracketed.startswith("http") or unbracketed.startswith("www"):
+        return True
+
+    has_store_link = bool(re.search(r"\[\s*(?:testflight|app\s*store|play\s*store|github|gitlab|demo|link|website|apk|code)", clean_lower))
+    if has_store_link and len(clean) < 55:
+        return True
+
+    # 3. Action verbs or sentence fragments (e.g. 'serving 150+ users.', 'architected an offline-first...')
+    if clean[0].islower():
+        return True
+
+    action_verbs = {
+        "serving", "served", "architected", "architecting", "developed", "developing",
+        "built", "building", "designed", "designing", "implemented", "implementing",
+        "created", "creating", "engineered", "engineering", "spearheaded", "spearheading",
+        "led", "leading", "managed", "managing", "worked", "working", "leveraged",
+        "leveraging", "utilized", "utilizing", "using", "reduced", "reducing",
+        "increased", "increasing", "improved", "improving", "optimized", "optimizing",
+        "collaborated", "collaborating", "contributed", "contributing", "maintained",
+        "maintaining", "deployed", "deploying", "integrated", "integrating", "enabled", "enabling"
+    }
+    first_word = re.split(r"[\s,\.\-]+", clean_lower)[0]
+    if first_word in action_verbs:
+        return True
+
+    # 4. Tech stack / tools labels
+    if re.match(r"^(?:tech(?:nolog(?:y|ies))?|tools?|skills?|environment|stack)\b", clean_lower):
+        return True
+
+    # 5. Sub-platform tags or sub-bullet variants of current project
+    # e.g. If current project is 'Cyster', lines like 'CysteriOS', 'CysterAndroid', 'iOS', 'Android'
+    if current_proj_title:
+        base_name = re.split(r"[\s\-–—:|]+", current_proj_title.strip())[0].lower()
+        if len(base_name) >= 3 and clean_lower.startswith(base_name):
+            rem = clean_lower[len(base_name):].strip(" \t\-_:|/[]()")
+            platform_tokens = ("ios", "android", "web", "app", "mobile", "frontend", "backend")
+            for pt in platform_tokens:
+                if rem.startswith(pt):
+                    return True
+        if clean_lower in {"ios", "android", "web", "frontend", "backend"}:
+            return True
+
+    # 6. Sentence ending in period with multiple words
+    if clean.endswith(".") and len(clean.split()) > 2 and (" " in clean):
+        return True
+
+    return False
+
+
 def _extract_projects(project_section_text: str) -> List[Dict[str, Any]]:
-    """Parses project section into list of {title, description, tech} items with artifact filtering."""
+    """Parses project section into list of {title, description, tech} items with artifact and date filtering."""
     if not project_section_text:
         return []
 
@@ -40,7 +117,7 @@ def _extract_projects(project_section_text: str) -> List[Dict[str, Any]]:
 
     for line in raw_lines:
         if _is_glyph_or_artifact(line):
-            # Glyph line like '• G' or '•' signals that previous project is closed, next line is new project title!
+            # Glyph line signals previous project closed
             if current_proj and len(current_proj["title"]) > 2:
                 projects.append(current_proj)
                 current_proj = None
@@ -50,25 +127,37 @@ def _extract_projects(project_section_text: str) -> List[Dict[str, Any]]:
         if not clean_line:
             continue
 
+        # Check if line cannot be a project title (dates, links, verbs, platform tags)
+        curr_title = current_proj["title"] if current_proj else None
+        if _is_invalid_project_title(clean_line, curr_title):
+            # This line belongs to the description/tech of current project
+            if current_proj:
+                current_proj["description"] = (current_proj["description"] + " " + clean_line).strip()
+                more_tech = extract_skills_from_text(clean_line)
+                for t in more_tech:
+                    if t not in current_proj["tech"]:
+                        current_proj["tech"].append(t)
+            continue
+
         # Is this line a sub-bullet description point?
-        is_sub_bullet = line.startswith(("-", "*", "–", "↳")) and not re.search(r"\[\s*(?:github|link|demo)", line, re.I)
-        has_link = bool(re.search(r"\[\s*(?:github|link|demo)", line, re.I))
+        is_sub_bullet = line.startswith(("-", "*", "–", "↳"))
 
         # Check if line looks like a new project title
         is_new_project = (
             current_proj is None
-            or has_link
-            or (not is_sub_bullet and len(clean_line) < 70 and current_proj.get("description"))
+            or (not is_sub_bullet and len(clean_line) < 80 and current_proj.get("description"))
             or (not is_sub_bullet and line.startswith(("•", "1.", "2.", "3.", "4.", "5.")))
         )
 
         clean_title = re.sub(r"\[\s*(?:github|link|demo)\s*(?:link)?\s*\]", "", clean_line, flags=re.I).strip()
+        # Clean trailing separators like ' -', ' |', ':'
+        clean_title = re.sub(r"[\s\-–—:|]+$", "", clean_title).strip()
 
-        if is_new_project:
+        if is_new_project and clean_title:
             if current_proj and len(current_proj["title"]) > 2:
                 projects.append(current_proj)
             current_proj = {
-                "title": clean_title[:75] if clean_title else clean_line[:75],
+                "title": clean_title[:75],
                 "description": clean_line,
                 "tech": extract_skills_from_text(line)
             }
@@ -80,11 +169,12 @@ def _extract_projects(project_section_text: str) -> List[Dict[str, Any]]:
                     if t not in current_proj["tech"]:
                         current_proj["tech"].append(t)
             else:
-                current_proj = {
-                    "title": clean_title[:75] if clean_title else clean_line[:75],
-                    "description": clean_line,
-                    "tech": extract_skills_from_text(line)
-                }
+                if clean_title:
+                    current_proj = {
+                        "title": clean_title[:75],
+                        "description": clean_line,
+                        "tech": extract_skills_from_text(line)
+                    }
 
     if current_proj and len(current_proj["title"]) > 2:
         projects.append(current_proj)
@@ -95,7 +185,13 @@ def _extract_projects(project_section_text: str) -> List[Dict[str, Any]]:
     for p in projects:
         clean_title = _clean_bullet_text(p["title"])
         clean_title = re.sub(r"\[\s*(?:github|link|demo)\s*(?:link)?\s*\]", "", clean_title, flags=re.I).strip()
-        if not _is_glyph_or_artifact(clean_title) and len(clean_title) > 2 and clean_title.lower() not in seen_titles:
+        clean_title = re.sub(r"[\s\-–—:|]+$", "", clean_title).strip()
+        if (
+            not _is_glyph_or_artifact(clean_title)
+            and not _is_invalid_project_title(clean_title)
+            and len(clean_title) > 2
+            and clean_title.lower() not in seen_titles
+        ):
             p["title"] = clean_title
             seen_titles.add(clean_title.lower())
             if not p.get("tech"):

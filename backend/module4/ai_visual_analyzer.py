@@ -137,53 +137,73 @@ def _analyze_frame_heuristics(image_base64: str) -> dict:
         spread_x = float(np.std(x_coords)) / W
         aspect_ratio = spread_x / (spread_y + 1e-5)
 
-        # 3. Posture Evaluation:
+        # 3. Background & Multi-Person Check (computed first to prevent wide bounding box being mistaken for lying down)
+        left_skin = float(np.sum(skin_mask[:, :int(W * 0.33)]))
+        right_skin = float(np.sum(skin_mask[:, int(W * 0.67):]))
+        center_skin = float(np.sum(skin_mask[:, int(W * 0.33):int(W * 0.67)]))
+
+        # Multi-person / Extra people detection:
+        # 1. Significant skin in left or right third while candidate is in center
+        has_person_on_left = (left_skin > 0.16 * skin_count and center_skin > 0.22 * skin_count)
+        has_person_on_right = (right_skin > 0.16 * skin_count and center_skin > 0.22 * skin_count)
+        # 2. People flanking both sides or two people on left & right
+        has_two_flanks = (left_skin > 0.18 * skin_count and right_skin > 0.18 * skin_count)
+        # 3. Wide horizontal dispersion (two people separated horizontally)
+        has_wide_dispersion = (spread_x > 0.21 and skin_ratio > 0.035)
+
+        has_extra_person = has_person_on_left or has_person_on_right or has_two_flanks or has_wide_dispersion
+        background = "extra_people" if has_extra_person else "acceptable"
+
+        # 4. Posture Evaluation:
         # Upright sitting face is in upper 20%-55% and taller than wide.
-        # Lying down on bed / pillow: face centroid is low (center_y > 0.62) or horizontally elongated (aspect_ratio > 1.35)
+        # Lying down on bed / pillow: face centroid is very low (center_y > 0.66) or horizontally elongated (aspect_ratio > 1.45 and center_y > 0.50)
         posture = "upright"
         is_lying_down = False
-        if center_y > 0.62 or aspect_ratio > 1.35:
+        if center_y > 0.66 or (aspect_ratio > 1.45 and not has_extra_person and center_y > 0.50):
             posture = "lying_down"
             is_lying_down = True
         elif center_y > 0.52:
             posture = "slouching"
 
-        # 4. Background & Eye Contact Check
-        # Check if skin pixels are split into multiple separated clusters (extra people)
-        left_skin = np.sum(skin_mask[:, :int(W * 0.33)])
-        right_skin = np.sum(skin_mask[:, int(W * 0.67):])
-        center_skin = np.sum(skin_mask[:, int(W * 0.33):int(W * 0.67)])
-        has_extra_person = (
-            left_skin > 0.25 * skin_count and
-            right_skin > 0.25 * skin_count and
-            center_skin > 0.1 * skin_count
-        )
-
+        # 5. Eye contact quality:
+        # Centered face attentive to webcam: 0.36 <= center_x <= 0.64 and 0.20 <= center_y <= 0.48
         eye_contact = "good"
-        if abs(center_x - 0.5) > 0.25:
+        eye_issue_detail = ""
+        if abs(center_x - 0.5) > 0.14:
             eye_contact = "poor"
+            eye_issue_detail = "sideways"
+        elif center_y > 0.50:
+            eye_contact = "poor"
+            eye_issue_detail = "down"
+        elif center_y < 0.18:
+            eye_contact = "poor"
+            eye_issue_detail = "up"
 
-        background = "extra_people" if has_extra_person else "acceptable"
-
-        # 5. Attire check (lower 25% of frame)
+        # 6. Attire check (lower 25% of frame)
         lower_region = arr[int(H * 0.75):, :]
         lower_std = float(np.mean(np.std(lower_region, axis=2)))
         attire = "formal"
         if lower_std > 48.0:
             attire = "semi_formal"
 
-        # Generate alert
+        # Generate alert (Prioritize security/integrity violations first: extra people -> lying down -> eye contact)
         overall_alert = False
         alert_message = ""
-        if is_lying_down:
+        if has_extra_person:
             overall_alert = True
-            alert_message = "Please sit upright — you appear to be lying down or slouching."
-        elif has_extra_person:
+            alert_message = "Multiple people detected in frame. Please maintain a private setting."
+        elif is_lying_down:
             overall_alert = True
-            alert_message = "Another person detected in background. Maintain a private setting."
+            alert_message = "Please sit upright — you appear to be lying down."
         elif eye_contact == "poor":
             overall_alert = True
-            alert_message = "Please look at the camera for eye contact."
+            if eye_issue_detail == "down":
+                alert_message = "Please look at the camera — avoid looking down or reading notes."
+            else:
+                alert_message = "Please look directly at the camera to maintain eye contact."
+        elif posture == "slouching":
+            overall_alert = True
+            alert_message = "Please sit upright with good interview posture."
 
         return {
             "posture": posture,
@@ -192,7 +212,7 @@ def _analyze_frame_heuristics(image_base64: str) -> dict:
             "background": background,
             "overall_alert": overall_alert,
             "alert_message": alert_message,
-            "confidence": 0.80,
+            "confidence": 0.85,
             "error": None,
             "source": "cv_heuristics",
         }
@@ -273,9 +293,19 @@ async def analyze_frame_with_gemini(
             "source": "gemini_vision",
         }
 
-        if result["posture"] == "lying_down" and not result["overall_alert"]:
+        # Enforce safety overrides if any violation detected by Gemini
+        if result["background"] == "extra_people":
             result["overall_alert"] = True
-            result["alert_message"] = "Please sit upright — you appear to be lying down."
+            if not result.get("alert_message"):
+                result["alert_message"] = "Multiple people detected in frame. Please maintain a private setting."
+        elif result["eye_contact"] == "poor":
+            result["overall_alert"] = True
+            if not result.get("alert_message"):
+                result["alert_message"] = "Please look directly at the camera to maintain eye contact."
+        elif result["posture"] == "lying_down":
+            result["overall_alert"] = True
+            if not result.get("alert_message"):
+                result["alert_message"] = "Please sit upright — you appear to be lying down."
 
         return result
 

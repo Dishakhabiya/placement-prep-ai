@@ -145,14 +145,6 @@ export default function TopicsScreen({ navigation }) {
         >
           <Text style={styles.startInterviewBtnText}>🚀 Start Mock Interview (Module 2) →</Text>
         </TouchableOpacity>
-
-        {/* Chat with AI Coach CTA */}
-        <TouchableOpacity
-          style={styles.chatCoachBtn}
-          onPress={() => navigation.navigate('Chatbot')}
-        >
-          <Text style={styles.chatCoachBtnText}>💬 Chat with AI Coach</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
