@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thinking Podcast — Animated Miniature Studio Prototype</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="podcast-app-shell">
+
+  <!-- ================= 1. STUDIO HEADER BAR ================= -->
+  <header class="studio-top-bar">
+    <div class="brand-wrap">
+      <div class="on-air-badge">
+        <span class="on-air-dot"></span>
+        <span>ON AIR</span>
+      </div>
+      <div class="brand-title">
+        THINKING PODCAST
+        <span class="brand-episode-tag">Ep. 42 • Live Tri-Host Roundtable</span>
+      </div>
+    </div>
+
+    <!-- Live Studio Equalizer Spectrum Visualizer -->
+    <div class="header-vu-meter" id="master-vu-meter" title="Studio audio activity">
+      <div class="vu-bar" style="height: 6px;"></div>
+      <div class="vu-bar" style="height: 12px;"></div>
+      <div class="vu-bar" style="height: 16px;"></div>
+      <div class="vu-bar" style="height: 9px;"></div>
+      <div class="vu-bar" style="height: 14px;"></div>
+      <div class="vu-bar" style="height: 8px;"></div>
+      <div class="vu-bar" style="height: 13px;"></div>
+    </div>
+
+    <div class="header-controls">
+      <button class="ctrl-btn" id="btn-speed-toggle" title="Cycle discussion pacing">
+        <span id="speed-label">1.0x Speed</span>
+      </button>
+
+      <button class="ctrl-btn" id="btn-motion-toggle" title="Toggle reduced motion">
+        <span id="motion-label">Motion: Full</span>
+      </button>
+
+      <button class="ctrl-btn" id="btn-sound-toggle" title="Toggle studio synth clicks (defaults to silent)">
+        <span id="sound-label">Audio: Muted</span>
+      </button>
+
+      <button class="ctrl-btn" id="btn-restart-show" title="Reset studio discussion">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= 2. MAIN SPLIT WORKSPACE ================= -->
+  <main class="main-stage-split">
+
+    <!-- Left / Center Stage: The Animated Studio Viewport -->
+    <section class="studio-viewport" id="studio-viewport">
+
+      <!-- Studio Wall Monitor Overlay Badge -->
+      <div class="studio-monitor-badge" id="studio-monitor-badge">
+        <span>SESSION:</span>
+        <span class="active-topic-txt" id="monitor-topic-txt">Roundtable Ready</span>
+      </div>
+
+      <!-- Floating Idea Cards in Studio Space -->
+      <div class="host-idea-card idea-card-nova" id="idea-card-nova">
+        <div style="font-weight: 800; color: #f59e0b; margin-bottom: 2px;">NOVA • STRATEGY</div>
+        <div id="idea-card-nova-txt">Structured framework & time blocks</div>
+      </div>
+
+      <div class="host-idea-card idea-card-pixel" id="idea-card-pixel">
+        <div style="font-weight: 800; color: #06b6d4; margin-bottom: 2px;">PIXEL • CREATIVE</div>
+        <div id="idea-card-pixel-txt">Gamified momentum & creative sprint</div>
+      </div>
+
+      <div class="host-idea-card idea-card-echo" id="idea-card-echo">
+        <div style="font-weight: 800; color: #8b5cf6; margin-bottom: 2px;">ECHO • CRITIC</div>
+        <div id="idea-card-echo-txt">Burnout stress-test & realistic buffers</div>
+      </div>
+
+      <!-- High-Quality Animated Studio SVG Canvas -->
+      <svg class="studio-svg-canvas" viewBox="0 0 960 620" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Radial studio ambient glows -->
+          <radialGradient id="novaSpotlight" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+          </radialGradient>
+
+          <radialGradient id="pixelSpotlight" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+          </radialGradient>
+
+          <radialGradient id="echoSpotlight" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>
+          </radialGradient>
+
+          <linearGradient id="tableWoodGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3b271d"/>
+            <stop offset="35%" stop-color="#2a1b14"/>
+            <stop offset="100%" stop-color="#19100c"/>
+          </linearGradient>
+
+          <linearGradient id="tableEdgeGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#69432d"/>
+            <stop offset="50%" stop-color="#8c5b3e"/>
+            <stop offset="100%" stop-color="#69432d"/>
+          </linearGradient>
+
+          <!-- Drop shadow filter -->
+          <filter id="studioDropShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+        </defs>
+
+        <!-- ================= LAYER 0: STUDIO WALL & ACOUSTIC PANELS ================= -->
+        <rect width="960" height="620" fill="#0d131d"/>
+
+        <!-- Acoustic Hexagon Sound Baffles on Back Wall -->
+        <g opacity="0.25" stroke="#223046" stroke-width="1.5" fill="#131c2a">
+          <polygon points="120,80 150,62 180,80 180,115 150,132 120,115"/>
+          <polygon points="185,117 215,99 245,117 245,152 215,169 185,152"/>
+          <polygon points="380,70 410,52 440,70 440,105 410,122 380,105"/>
+          <polygon points="445,107 475,89 505,107 505,142 475,159 445,142"/>
+          <polygon points="720,80 750,62 780,80 780,115 750,132 720,115"/>
+          <polygon points="785,117 815,99 845,117 845,152 815,169 785,152"/>
+        </g>
+
+        <!-- Vertical Neon LED Tubes Behind Hosts -->
+        <rect x="210" y="40" width="4" height="280" rx="2" fill="#f59e0b" opacity="0.6"/>
+        <rect x="478" y="30" width="4" height="290" rx="2" fill="#06b6d4" opacity="0.6"/>
+        <rect x="746" y="40" width="4" height="280" rx="2" fill="#8b5cf6" opacity="0.6"/>
+
+        <!-- Hanging Studio "ON AIR" Sign in Center -->
+        <g transform="translate(435, 18)">
+          <rect x="0" y="0" width="90" height="24" rx="4" fill="#1e1010" stroke="#ef4444" stroke-width="1.5"/>
+          <text x="45" y="16" font-size="10" font-weight="900" fill="#f87171" letter-spacing="2" text-anchor="middle">ON AIR</text>
+        </g>
+
+        <!-- Speaker Halos (Active speaker illumination) -->
+        <circle id="halo-nova" class="speaker-halo" cx="215" cy="270" r="140" fill="url(#novaSpotlight)"/>
+        <circle id="halo-pixel" class="speaker-halo" cx="480" cy="260" r="150" fill="url(#pixelSpotlight)"/>
+        <circle id="halo-echo" class="speaker-halo" cx="745" cy="270" r="140" fill="url(#echoSpotlight)"/>
+
+        <!-- Studio Chairs Behind Table -->
+        <!-- Nova Chair -->
+        <path d="M 150,250 Q 215,195 280,250 L 275,350 L 155,350 Z" fill="#17202e"/>
+        <!-- Pixel Chair -->
+        <path d="M 410,230 Q 480,180 550,230 L 545,340 L 415,340 Z" fill="#17202e"/>
+        <!-- Echo Chair -->
+        <path d="M 680,250 Q 745,195 810,250 L 805,350 L 685,350 Z" fill="#17202e"/>
+
+        <!-- ================= LAYER 1: THREE ANIMATED HOST RIGS ================= -->
+
+        <!-- ---------------- HOST 1: NOVA (The Strategist, Left) ---------------- -->
+        <g id="host-nova-group" transform="translate(215, 290) scale(1.22, 1.22)">
+          <!-- Dynamic Body Torso -->
+          <g id="nova-torso">
+            <path d="M -35,50 L -25,-10 L 25,-10 L 35,50 Z" fill="#1e293b"/> <!-- Blazer -->
+            <path d="M -12,-10 L 0,8 L 12,-10 Z" fill="#f59e0b"/> <!-- Turtleneck collar -->
+          </g>
+
+          <!-- Left Arm (Holding Tablet) -->
+          <g id="nova-arm-l" transform-origin="-24 0">
+            <path d="M -24,0 L -38,36 L -16,40" stroke="#1e293b" stroke-width="12" stroke-linecap="round" fill="none"/>
+            <circle cx="-16" cy="40" r="5" fill="#fcd34d"/>
+          </g>
+
+          <!-- Right Arm (Analytical Gesturing Arm) -->
+          <g id="nova-arm-r" transform-origin="24 0">
+            <path d="M 24,0 L 40,32 L 20,40" stroke="#1e293b" stroke-width="12" stroke-linecap="round" fill="none"/>
+            <circle cx="20" cy="40" r="5" fill="#fcd34d"/>
+          </g>
+
+          <!-- Head Group -->
+          <g id="nova-head" transform-origin="0 -22">
+            <!-- Head & Face -->
+            <ellipse cx="0" cy="-24" rx="17" ry="20" fill="#fcd34d"/>
+            <!-- Sleek Brunette Bob Hair -->
+            <path d="M -18,-36 C -18,-48 18,-48 18,-36 C 22,-20 20,-6 18,2 L 13,0 C 13,-18 10,-32 0,-34 C -10,-32 -13,-18 -13,0 L -18,2 C -20,-6 -22,-20 -18,-36 Z" fill="#312e81"/>
+            
+            <!-- Glasses -->
+            <rect x="-14" y="-27" width="12" height="9" rx="2" fill="none" stroke="#f59e0b" stroke-width="1.8"/>
+            <rect x="2" y="-27" width="12" height="9" rx="2" fill="none" stroke="#f59e0b" stroke-width="1.8"/>
+            <line x1="-2" y1="-23" x2="2" y2="-23" stroke="#f59e0b" stroke-width="1.8"/>
+
+            <!-- Eyes Normal -->
+            <g id="nova-eyes-normal">
+              <ellipse cx="-8" cy="-22" rx="2" ry="2.2" fill="#0f172a"/>
+              <ellipse cx="8" cy="-22" rx="2" ry="2.2" fill="#0f172a"/>
+              <circle cx="-7" cy="-23" r="0.8" fill="#ffffff"/>
+              <circle cx="9" cy="-23" r="0.8" fill="#ffffff"/>
+            </g>
+            <!-- Eyes Nod / Closed -->
+            <g id="nova-eyes-nod" style="display: none;">
+              <path d="M -11,-22 Q -8,-24 -5,-22" stroke="#0f172a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <path d="M 5,-22 Q 8,-24 11,-22" stroke="#0f172a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- Mouth -->
+            <path id="nova-mouth-smile" d="M -5,-12 Q 0,-9 5,-12" stroke="#881337" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            <ellipse id="nova-mouth-speaking" cx="0" cy="-11" rx="4" ry="3" fill="#881337" style="display: none;"/>
+
+            <!-- Studio Headphones with Amber accents -->
+            <path d="M -20,-24 C -22,-45 22,-45 20,-24" fill="none" stroke="#475569" stroke-width="3"/>
+            <rect x="-22" y="-30" width="5" height="15" rx="2.5" fill="#f59e0b"/>
+            <rect x="17" y="-30" width="5" height="15" rx="2.5" fill="#f59e0b"/>
+          </g>
+
+          <!-- Digital Tablet Prop on Desk -->
+          <g transform="translate(-15, 38) rotate(-4)">
+            <rect x="0" y="0" width="30" height="20" rx="3" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5" filter="url(#studioDropShadow)"/>
+            <line x1="4" y1="5" x2="26" y2="5" stroke="#ffffff" stroke-width="1.2"/>
+            <line x1="4" y1="9" x2="20" y2="9" stroke="#ffffff" stroke-width="1.2"/>
+            <line x1="4" y1="13" x2="22" y2="13" stroke="#f59e0b" stroke-width="1.2"/>
+          </g>
+        </g>
+
+        <!-- ---------------- HOST 2: PIXEL (The Creative, Center) ---------------- -->
+        <g id="host-pixel-group" transform="translate(480, 275) scale(1.25, 1.25)">
+          <!-- Dynamic Body Torso -->
+          <g id="pixel-torso">
+            <path d="M -40,55 L -28,-8 L 28,-8 L 40,55 Z" fill="#0891b2"/> <!-- Teal Hoodie -->
+            <path d="M -15,-8 Q 0,8 15,-8 Z" fill="#ec4899"/> <!-- Pink hood opening -->
+          </g>
+
+          <!-- Left Arm (Elbow on table, gesturing) -->
+          <g id="pixel-arm-l" transform-origin="-26 2">
+            <path d="M -26,2 L -42,32 L -20,38" stroke="#0891b2" stroke-width="13" stroke-linecap="round" fill="none"/>
+            <circle cx="-20" cy="38" r="6" fill="#fbcfe8"/>
+          </g>
+
+          <!-- Right Arm (Holding stylus / waving) -->
+          <g id="pixel-arm-r" transform-origin="26 2">
+            <path d="M 26,2 L 44,30 L 22,38" stroke="#0891b2" stroke-width="13" stroke-linecap="round" fill="none"/>
+            <circle cx="22" cy="38" r="6" fill="#fbcfe8"/>
+          </g>
+
+          <!-- Head Group -->
+          <g id="pixel-head" transform-origin="0 -20">
+            <!-- Head Shape -->
+            <ellipse cx="0" cy="-22" rx="18" ry="20" fill="#fed7aa"/>
+            
+            <!-- Expressive Wavy Hair with Pink Streak -->
+            <path d="M -20,-32 C -22,-48 22,-48 20,-32 C 26,-18 22,-4 20,4 C 14,-2 14,-14 12,-20 C 6,-18 -4,-18 -10,-20 C -12,-14 -12,-2 -18,4 C -22,-4 -24,-18 -20,-32 Z" fill="#0f172a"/>
+            <path d="M 10,-38 C 14,-32 16,-20 18,-14" stroke="#ec4899" stroke-width="3" fill="none" stroke-linecap="round"/> <!-- Pink streak -->
+
+            <!-- Big Anime Sparkle Eyes (Normal) -->
+            <g id="pixel-eyes-normal">
+              <ellipse cx="-8" cy="-20" rx="3.5" ry="4" fill="#0f172a"/>
+              <ellipse cx="8" cy="-20" rx="3.5" ry="4" fill="#0f172a"/>
+              <circle cx="-7" cy="-22" r="1.5" fill="#ffffff"/>
+              <circle cx="9" cy="-22" r="1.5" fill="#ffffff"/>
+              <circle cx="-9" cy="-19" r="0.8" fill="#38bdf8"/>
+              <circle cx="7" cy="-19" r="0.8" fill="#38bdf8"/>
+            </g>
+            <!-- Big Anime Eyes (Excited Eureka ^ ^) -->
+            <g id="pixel-eyes-excited" style="display: none;">
+              <path d="M -12,-20 Q -8,-25 -4,-20" stroke="#0f172a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <path d="M 4,-20 Q 8,-25 12,-20" stroke="#0f172a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- Mouth -->
+            <path id="pixel-mouth-smile" d="M -6,-10 Q 0,-6 6,-10" stroke="#9d174d" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path id="pixel-mouth-speaking" d="M -6,-11 Q 0,-3 6,-11 Z" fill="#9d174d" style="display: none;"/>
+
+            <!-- Headphones loosely draped around neck -->
+            <path d="M -18,-4 Q 0,10 18,-4" fill="none" stroke="#334155" stroke-width="4"/>
+            <circle cx="-18" cy="-4" r="5" fill="#06b6d4"/>
+            <circle cx="18" cy="-4" r="5" fill="#06b6d4"/>
+          </g>
+
+          <!-- Sketchpad with colorful notes Prop on Desk -->
+          <g transform="translate(-14, 40) rotate(3)">
+            <rect x="0" y="0" width="28" height="20" rx="2" fill="#fffdfa" stroke="#cbd5e1" stroke-width="1.5" filter="url(#studioDropShadow)"/>
+            <circle cx="7" cy="8" r="3" fill="#ec4899"/>
+            <line x1="13" y1="7" x2="24" y2="7" stroke="#06b6d4" stroke-width="2"/>
+            <line x1="13" y1="12" x2="22" y2="12" stroke="#f59e0b" stroke-width="2"/>
+          </g>
+        </g>
+
+        <!-- ---------------- HOST 3: ECHO (The Critic, Right) ---------------- -->
+        <g id="host-echo-group" transform="translate(745, 290) scale(1.22, 1.22)">
+          <!-- Dynamic Body Torso -->
+          <g id="echo-torso">
+            <path d="M -35,50 L -25,-10 L 25,-10 L 35,50 Z" fill="#1e1b4b"/> <!-- Dark Navy Denim -->
+            <path d="M -10,-10 L 0,-2 L 10,-10 Z" fill="#475569"/> <!-- Grey crew neck -->
+          </g>
+
+          <!-- Left Arm (Resting on Desk / Coffee Mug) -->
+          <g id="echo-arm-l" transform-origin="-24 0">
+            <path d="M -24,0 L -38,34 L -18,40" stroke="#1e1b4b" stroke-width="12" stroke-linecap="round" fill="none"/>
+            <circle cx="-18" cy="40" r="5" fill="#fde047"/>
+          </g>
+
+          <!-- Right Arm (Skeptical Chin / Console Tap) -->
+          <g id="echo-arm-r" transform-origin="24 0">
+            <path d="M 24,0 L 38,32 L 18,38" stroke="#1e1b4b" stroke-width="12" stroke-linecap="round" fill="none"/>
+            <circle cx="18" cy="38" r="5" fill="#fde047"/>
+          </g>
+
+          <!-- Head Group -->
+          <g id="echo-head" transform-origin="0 -22">
+            <!-- Head & Face -->
+            <ellipse cx="0" cy="-24" rx="17" ry="20" fill="#fde047"/>
+            
+            <!-- Stylish Textured Crop Hair -->
+            <path d="M -18,-32 C -18,-46 18,-46 18,-32 C 20,-24 18,-14 16,-8 C 12,-16 6,-30 0,-30 C -6,-30 -12,-16 -16,-8 C -18,-14 -20,-24 -18,-32 Z" fill="#292524"/>
+
+            <!-- Eyebrows (Skeptical left raised) -->
+            <path id="echo-brow-skeptic" d="M -12,-28 L -4,-30" stroke="#292524" stroke-width="2" stroke-linecap="round"/>
+            <path d="M 4,-28 L 12,-28" stroke="#292524" stroke-width="1.8" stroke-linecap="round"/>
+
+            <!-- Eyes (Narrowed Critic Gaze) -->
+            <g id="echo-eyes-normal">
+              <ellipse cx="-8" cy="-22" rx="2.5" ry="1.8" fill="#0f172a"/>
+              <ellipse cx="8" cy="-22" rx="2.5" ry="1.8" fill="#0f172a"/>
+              <circle cx="-9" cy="-23" r="0.7" fill="#ffffff"/>
+              <circle cx="7" cy="-23" r="0.7" fill="#ffffff"/>
+            </g>
+            <!-- Eyes (Approving Smile Nod) -->
+            <g id="echo-eyes-nod" style="display: none;">
+              <path d="M -11,-22 Q -8,-24 -5,-22" stroke="#0f172a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <path d="M 5,-22 Q 8,-24 11,-22" stroke="#0f172a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- Mouth -->
+            <path id="echo-mouth-smirk" d="M -4,-12 Q 1,-10 6,-13" stroke="#701a75" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            <ellipse id="echo-mouth-speaking" cx="0" cy="-11" rx="4" ry="2.8" fill="#701a75" style="display: none;"/>
+
+            <!-- Studio Headphones with Violet accents -->
+            <path d="M -20,-24 C -22,-45 22,-45 20,-24" fill="none" stroke="#475569" stroke-width="3"/>
+            <rect x="-22" y="-30" width="5" height="15" rx="2.5" fill="#8b5cf6"/>
+            <rect x="17" y="-30" width="5" height="15" rx="2.5" fill="#8b5cf6"/>
+          </g>
+
+          <!-- Ceramic Coffee Mug Prop -->
+          <g transform="translate(-18, 38)">
+            <rect x="0" y="0" width="14" height="18" rx="2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.2" filter="url(#studioDropShadow)"/>
+            <path d="M 14,3 Q 19,8 14,14" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+            <!-- Steam vapor -->
+            <path d="M 4,-2 Q 7,-8 4,-12" stroke="#cbd5e1" stroke-width="1" fill="none" opacity="0.6"/>
+            <path d="M 9,-3 Q 12,-9 9,-13" stroke="#cbd5e1" stroke-width="1" fill="none" opacity="0.6"/>
+          </g>
+        </g>
+
+        <!-- ================= LAYER 2: THE CURVED PODCAST DESK ================= -->
+        <!-- Desk Surface -->
+        <path d="M 60,330 C 260,310 700,310 900,330 L 930,620 L 30,620 Z" fill="url(#tableWoodGrad)"/>
+        <!-- Desk Chamfered Beveled Edge -->
+        <path d="M 60,330 C 260,310 700,310 900,330 L 905,340 C 700,320 260,320 55,340 Z" fill="url(#tableEdgeGrad)"/>
+
+        <!-- Sound Mixing Console (In front of Echo & Nova) -->
+        <g transform="translate(360, 430)">
+          <rect x="0" y="0" width="240" height="90" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2" filter="url(#studioDropShadow)"/>
+          <!-- Fader Slots -->
+          <line x1="40" y1="20" x2="40" y2="70" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+          <line x1="80" y1="20" x2="80" y2="70" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+          <line x1="120" y1="20" x2="120" y2="70" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+          <line x1="160" y1="20" x2="160" y2="70" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+          <line x1="200" y1="20" x2="200" y2="70" stroke="#0f172a" stroke-width="4" stroke-linecap="round"/>
+
+          <!-- Colored Fader Caps -->
+          <rect x="34" y="32" width="12" height="16" rx="2" fill="#f59e0b"/> <!-- Nova Fader -->
+          <rect x="74" y="24" width="12" height="16" rx="2" fill="#06b6d4"/> <!-- Pixel Fader -->
+          <rect x="114" y="42" width="12" height="16" rx="2" fill="#8b5cf6"/> <!-- Echo Fader -->
+          <rect x="154" y="28" width="12" height="16" rx="2" fill="#10b981"/> <!-- Master -->
+          <rect x="194" y="35" width="12" height="16" rx="2" fill="#64748b"/>
+
+          <!-- LED VU Meter Strips on Console -->
+          <rect x="40" y="8" width="4" height="6" fill="#10b981"/>
+          <rect x="80" y="8" width="4" height="6" fill="#10b981"/>
+          <rect x="120" y="8" width="4" height="6" fill="#10b981"/>
+          <rect x="160" y="8" width="4" height="6" fill="#f59e0b"/>
+          <rect x="200" y="8" width="4" height="6" fill="#ef4444"/>
+        </g>
+
+        <!-- ================= LAYER 3: BROADCAST MICROPHONES ================= -->
+        <!-- Nova Mic (Left) -->
+        <g id="mic-nova-group" transform="translate(245, 305)">
+          <path d="M -30,120 L -15,50 L 15,20" stroke="#334155" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <!-- Shure SM7B Body -->
+          <rect x="10" y="10" width="28" height="14" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1.5" transform="rotate(-25 10 10)"/>
+          <rect id="mic-ring-nova" x="8" y="14" width="3" height="8" rx="1.5" fill="#f59e0b" opacity="0.3"/>
+        </g>
+
+        <!-- Pixel Mic (Center) -->
+        <g id="mic-pixel-group" transform="translate(480, 290)">
+          <path d="M 0,130 L -10,60 L 0,15" stroke="#334155" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <rect x="-8" y="5" width="16" height="26" rx="5" fill="#0f172a" stroke="#475569" stroke-width="1.5"/>
+          <rect id="mic-ring-pixel" x="-8" y="16" width="16" height="3" fill="#06b6d4" opacity="0.3"/>
+        </g>
+
+        <!-- Echo Mic (Right) -->
+        <g id="mic-echo-group" transform="translate(715, 305)">
+          <path d="M 30,120 L 15,50 L -15,20" stroke="#334155" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <rect x="-35" y="10" width="28" height="14" rx="4" fill="#0f172a" stroke="#475569" stroke-width="1.5" transform="rotate(25 -35 10)"/>
+          <rect id="mic-ring-echo" x="-11" y="14" width="3" height="8" rx="1.5" fill="#8b5cf6" opacity="0.3"/>
+        </g>
+
+      </svg>
+    </section>
+
+    <!-- Right Panel: Strictly Bounded Transcript & Selection Drawer -->
+    <aside class="sidebar-panel" id="sidebar-panel">
+
+      <!-- Active Topic Card -->
+      <div class="topic-summary-card">
+        <div class="topic-label-row">
+          <span class="topic-badge">Topic In Progress</span>
+          <span class="step-counter" id="step-counter-txt">Roundtable Ready</span>
+        </div>
+        <div class="topic-text" id="active-topic-display">Help me plan a productive study week</div>
+      </div>
+
+      <!-- Transcript Message Feed (Scrollable, Guaranteed Wrap) -->
+      <div class="transcript-feed" id="transcript-feed">
+        <!-- Scripted message rows appended dynamically -->
+      </div>
+
+      <!-- Recommendation Cards Section (Hidden until deliberation converges) -->
+      <div class="recommendations-tray hidden" id="recommendations-tray">
+        <div class="rec-title-row">
+          <span class="rec-heading">Deliberation Outcome</span>
+          <span style="font-size: 0.68rem; color: #38bdf8; font-weight: 700;">Choose Approach</span>
+        </div>
+        <div class="rec-cards-grid" id="rec-cards-grid">
+          <!-- Dynamic recommendation cards inserted here -->
+        </div>
+      </div>
+
+      <!-- Bottom Prompt Input Dock -->
+      <div class="prompt-dock-area">
+        <!-- Example Quick Prompt Chips -->
+        <div class="example-chips-wrap">
+          <button class="example-chip-btn" data-prompt="Help me plan a productive study week.">Study Week</button>
+          <button class="example-chip-btn" data-prompt="Suggest a creative final-year project.">Final Project</button>
+          <button class="example-chip-btn" data-prompt="Help me prepare for a technical interview.">Tech Interview</button>
+          <button class="example-chip-btn" data-prompt="Design a better daily routine.">Daily Routine</button>
+        </div>
+
+        <form class="prompt-form-row" id="podcast-prompt-form">
+          <input type="text" class="prompt-input" id="podcast-input"
+                 placeholder="Ask the studio (e.g. Plan my study week, Design an app...)"
+                 autocomplete="off" maxlength="120"
+                 value="Help me plan a productive study week." />
+          <button type="submit" class="prompt-submit-btn" id="btn-submit-topic">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Discuss
+          </button>
+        </form>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- ================= 3. SECONDARY STATES TESTER TRAY ================= -->
+  <footer class="states-tester-tray">
+    <div class="states-pills-row">
+      <span style="font-weight: 800; color: #94a3b8; margin-right: 4px;">Studio States:</span>
+      <button class="state-pill active" data-state="idle">1. Idle Studio</button>
+      <button class="state-pill" data-state="request">2. Request In</button>
+      <button class="state-pill" data-state="nova">3. Nova Speaks</button>
+      <button class="state-pill" data-state="pixel">4. Pixel Responds</button>
+      <button class="state-pill" data-state="echo">5. Echo Challenges</button>
+      <button class="state-pill" data-state="debate">6. Deep Debate</button>
+      <button class="state-pill" data-state="recs">7. Recommendations</button>
+      <button class="state-pill" data-state="select">8. User Choice</button>
+      <button class="state-pill" data-state="celebrate">9. Combined Cheer</button>
+      <button class="state-pill" data-state="reset">10. New Request</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <span style="color: #64748b;">Active:</span>
+      <span id="current-state-lbl" style="font-weight: 700; color: #38bdf8;">Idle Studio</span>
+    </div>
+  </footer>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
