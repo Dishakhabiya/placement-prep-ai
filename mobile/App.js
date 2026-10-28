@@ -15,6 +15,9 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import MockInterviewScreen from './src/screens/MockInterviewScreen';
 import PerformanceReportScreen from './src/screens/PerformanceReportScreen';
 import ChatbotScreen from './src/screens/ChatbotScreen';
+import PrepHomeScreen from './src/screens/PrepHomeScreen';
+import PrepPinkHomeScreen from './src/screens/PrepPinkHomeScreen';
+import PrepPracticeScreen from './src/screens/PrepPracticeScreen';
 
 // Persistent Global Floating Chatbot
 import FloatingChatbot from './src/components/FloatingChatbot';
@@ -23,8 +26,24 @@ export const navigationRef = createNavigationContainerRef();
 
 const Stack = createNativeStackNavigator();
 
+const getInitialRoute = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.port === '8084' || window.location.hash.includes('preppractice')) {
+      return 'PrepPractice';
+    }
+    if (window.location.port === '8083' || window.location.hash.includes('preppink')) {
+      return 'PrepPinkHome';
+    }
+    if (window.location.port === '8082' || window.location.hash.includes('prephome')) {
+      return 'PrepHome';
+    }
+  }
+  return 'Home';
+};
+
 export default function App() {
-  const [currentRoute, setCurrentRoute] = useState('Home');
+  const initialRoute = getInitialRoute();
+  const [currentRoute, setCurrentRoute] = useState(initialRoute);
 
   return (
     <View style={styles.appRoot}>
@@ -39,7 +58,7 @@ export default function App() {
       >
         <StatusBar style="dark" backgroundColor="#FFFFFF" />
         <Stack.Navigator
-          initialRouteName="Home"
+          initialRouteName={initialRoute}
           screenOptions={{
             headerStyle: {
               backgroundColor: '#FFFFFF',
@@ -59,6 +78,21 @@ export default function App() {
           <Stack.Screen
             name="Home"
             component={HomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepHome"
+            component={PrepHomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepPinkHome"
+            component={PrepPinkHomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepPractice"
+            component={PrepPracticeScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen
@@ -110,7 +144,9 @@ export default function App() {
       </NavigationContainer>
 
       {/* Global persistent chatbot docked in the bottom-left corner across every screen */}
-      <FloatingChatbot navigationRef={navigationRef} currentRoute={currentRoute} />
+      {currentRoute !== 'PrepHome' && currentRoute !== 'PrepPinkHome' && currentRoute !== 'PrepPractice' && (
+        <FloatingChatbot navigationRef={navigationRef} currentRoute={currentRoute} />
+      )}
     </View>
   );
 }
