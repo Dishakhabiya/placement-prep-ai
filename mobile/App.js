@@ -18,6 +18,7 @@ import ChatbotScreen from './src/screens/ChatbotScreen';
 import PrepHomeScreen from './src/screens/PrepHomeScreen';
 import PrepPinkHomeScreen from './src/screens/PrepPinkHomeScreen';
 import PrepPracticeScreen from './src/screens/PrepPracticeScreen';
+import PrepAIApp from './src/prepai/PrepAIApp';
 
 // Persistent Global Floating Chatbot
 import FloatingChatbot from './src/components/FloatingChatbot';
@@ -42,6 +43,15 @@ const getInitialRoute = () => {
 };
 
 export default function App() {
+  if (
+    process.env.EXPO_PUBLIC_APP_VARIANT === 'prepai' ||
+    (typeof window !== 'undefined' &&
+      window.location &&
+      (window.location.port === '8082' || window.location.hash.includes('prepaidsk')))
+  ) {
+    return <PrepAIApp />;
+  }
+
   const initialRoute = getInitialRoute();
   const [currentRoute, setCurrentRoute] = useState(initialRoute);
 
