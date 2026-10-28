@@ -243,7 +243,7 @@ export function StopAnswerBtn({ onPress, colors }) {
   );
 }
 
-export function NextQuestionBtn({ onPress, colors }) {
+export function NextQuestionBtn({ onPress, colors, isWeb = false }) {
   return (
     <PressableScale
       onPress={() => {
@@ -251,9 +251,36 @@ export function NextQuestionBtn({ onPress, colors }) {
         onPress();
       }}
       accessibilityLabel="Next question"
-      style={[styles.nextBtn, { backgroundColor: colors.ink }]}
+      style={[
+        styles.nextBtn,
+        { backgroundColor: colors.ink },
+        isWeb && styles.nextBtnWeb,
+      ]}
     >
-      <Text style={[styles.nextText, { color: colors.card }]}>Next question</Text>
+      <Text style={[styles.nextText, { color: colors.card }, isWeb && styles.nextTextWeb]}>
+        Next question
+      </Text>
+    </PressableScale>
+  );
+}
+
+export function ShareResultBtn({ onPress, colors, isWeb = false }) {
+  return (
+    <PressableScale
+      onPress={() => {
+        triggerHaptic('light');
+        onPress();
+      }}
+      accessibilityLabel="Share result"
+      style={[
+        styles.shareBtn,
+        { borderColor: colors.ink },
+        isWeb && styles.shareBtnWeb,
+      ]}
+    >
+      <Text style={[styles.shareText, { color: colors.ink }, isWeb && styles.shareTextWeb]}>
+        Share result
+      </Text>
     </PressableScale>
   );
 }
@@ -350,10 +377,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({ web: { cursor: 'pointer' } }),
   },
+  nextBtnWeb: {
+    marginTop: 0,
+    width: 'auto',
+    height: 50,
+    paddingHorizontal: 28,
+    borderRadius: 25,
+  },
   nextText: {
     fontFamily: FONTS.outfit.bold,
     fontSize: 15,
     fontWeight: '700',
+  },
+  nextTextWeb: {
+    fontSize: 16,
+  },
+  shareBtn: {
+    height: 48,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    ...Platform.select({ web: { cursor: 'pointer' } }),
+  },
+  shareBtnWeb: {
+    height: 50,
+    paddingHorizontal: 26,
+    borderRadius: 25,
+  },
+  shareText: {
+    fontFamily: FONTS.outfit.bold,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  shareTextWeb: {
+    fontSize: 16,
   },
   sendBtn: {
     width: 44,

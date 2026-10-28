@@ -4,14 +4,24 @@ import Svg, { Path, Rect, G } from 'react-native-svg';
 
 export default function Headphones({
   isRecording = false,
+  isIdle = true,
   voiceLevel = 0,
+  width = 210,
+  height = 122,
   colors,
 }) {
+  const svgRef = useRef(null);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waveAnimInner = useRef(new Animated.Value(0.15)).current;
   const waveAnimOuter = useRef(new Animated.Value(0.15)).current;
   const [waveInnerOp, setWaveInnerOp] = useState(0.15);
   const [waveOuterOp, setWaveOuterOp] = useState(0.15);
+
+  // Mouse tracking state for cursor-aware animation (Feature 6)
+  const mouseAnimX = useRef(new Animated.Value(0)).current;
+  const mouseAnimY = useRef(new Animated.Value(0)).current;
+  const mouseAnimRot = useRef(new Animated.Value(0)).current;
+  const [trackTransform, setTrackTransform] = useState({ x: 0, y: 0, rot: 0 });
 
   // Float animation
   useEffect(() => {
@@ -68,6 +78,110 @@ export default function Headphones({
       waveAnimOuter.removeListener(l2);
     };
   }, [waveAnimInner, waveAnimOuter]);
+
+  // Track transform listeners for cursor tracking
+  useEffect(() => {
+    const lx = mouseAnimX.addListener(({ value }) =>
+      setTrackTransform((prev) => ({ ...prev, x: value }))
+    );
+    const ly = mouseAnimY.addListener(({ value }) =>
+      setTrackTransform((prev) => ({ ...prev, y: value }))
+    );
+    const lr = mouseAnimRot.addListener(({ value }) =>
+      setTrackTransform((prev) => ({ ...prev, rot: value }))
+    );
+    return () => {
+      mouseAnimX.removeListener(lx);
+      mouseAnimY.removeListener(ly);
+      mouseAnimRot.removeListener(lr);
+    };
+  }, [mouseAnimX, mouseAnimY, mouseAnimRot]);
+
+  // Cursor-aware mouse move tracking (web only, idle state only, disabled under reduced motion and on touch devices)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const isTouch =
+      'ontouchstart' in window ||
+      (window.matchMedia && window.matchMedia('(hover: none)').matches);
+    if (isTouch) return;
+
+    let reduceMotion = false;
+    if (
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      reduceMotion = true;
+    }
+
+    if (!isIdle || reduceMotion) {
+      Animated.parallel([
+        Animated.timing(mouseAnimX, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(mouseAnimY, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(mouseAnimRot, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+      return;
+    }
+
+    const handleMouseMove = (e) => {
+      if (!isIdle || reduceMotion) return;
+      const rect = svgRef.current?.getBoundingClientRect
+        ? svgRef.current.getBoundingClientRect()
+        : null;
+
+      const centreX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+      const centreY =
+        rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+
+      const dx = (e.clientX - centreX) / window.innerWidth;
+      const dy = (e.clientY - centreY) / window.innerHeight;
+
+      const targetX = Math.max(-8, Math.min(8, dx * 30));
+      const targetY = Math.max(-4, Math.min(4, dy * 14));
+      const targetRot = Math.max(-7, Math.min(7, dx * 18));
+
+      Animated.parallel([
+        Animated.timing(mouseAnimX, {
+          toValue: targetX,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(mouseAnimY, {
+          toValue: targetY,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(mouseAnimRot, {
+          toValue: targetRot,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [isIdle, mouseAnimX, mouseAnimY, mouseAnimRot]);
 
   // Wave pulse animation (switches speed when recording)
   useEffect(() => {
@@ -152,23 +266,34 @@ export default function Headphones({
   const leftTransform = `translate(65, 108) scale(${scaleX}, ${scaleY}) translate(-65, -108)`;
   const rightTransform = `translate(175, 108) scale(${scaleX}, ${scaleY}) translate(-175, -108)`;
 
+  const trackTransformStr = `translate(${trackTransform.x.toFixed(2)}, ${trackTransform.y.toFixed(2)}) rotate(${trackTransform.rot.toFixed(2)}, 120, 100)`;
+
   return (
-    <View style={{ width: 210, height: 122, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      ref={svgRef}
+      style={{
+        width,
+        height,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <Animated.View
         style={{
-          width: 210,
+          width,
           transform: [{ translateY: floatAnim }],
         }}
       >
         <Svg
-          width={210}
-          height={122}
+          width={width}
+          height={height}
           viewBox="0 0 240 140"
           style={{ overflow: 'visible' }}
           role="img"
           aria-label="PrepAI headphones"
         >
-          <G>
+          {/* Tracking G for cursor-aware mouse movement */}
+          <G transform={trackTransformStr}>
             {/* Outer Headband */}
             <Path
               d="M60 92C60 24 180 24 180 92"
@@ -190,14 +315,42 @@ export default function Headphones({
 
             {/* Left Cup & Pad with squash */}
             <G transform={leftTransform}>
-              <Rect x="44" y="80" width="42" height="56" rx="17" fill={colors.cup} />
-              <Rect x="52" y="90" width="14" height="36" rx="7" fill={colors.pad} />
+              <Rect
+                x="44"
+                y="80"
+                width="42"
+                height="56"
+                rx="17"
+                fill={colors.cup}
+              />
+              <Rect
+                x="52"
+                y="90"
+                width="14"
+                height="36"
+                rx="7"
+                fill={colors.pad}
+              />
             </G>
 
             {/* Right Cup & Pad with squash */}
             <G transform={rightTransform}>
-              <Rect x="154" y="80" width="42" height="56" rx="17" fill={colors.cup} />
-              <Rect x="174" y="90" width="14" height="36" rx="7" fill={colors.pad} />
+              <Rect
+                x="154"
+                y="80"
+                width="42"
+                height="56"
+                rx="17"
+                fill={colors.cup}
+              />
+              <Rect
+                x="174"
+                y="90"
+                width="14"
+                height="36"
+                rx="7"
+                fill={colors.pad}
+              />
             </G>
 
             {/* Sound waves Left */}

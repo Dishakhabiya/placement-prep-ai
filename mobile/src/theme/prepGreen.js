@@ -10,6 +10,7 @@ export const LIGHT_COLORS = {
   cup: '#1B2E1F',
   pad: '#3C5A42',
   soft: '#EEF4EA',
+  good: '#2E9E6B',
   micHalo: 'rgba(255, 91, 58, 0.5)',
 };
 
@@ -23,8 +24,11 @@ export const DARK_COLORS = {
   cup: '#2E4636',
   pad: '#587A60',
   soft: '#26372D',
+  good: '#5CCB94',
   micHalo: 'rgba(255, 107, 74, 0.5)',
 };
+
+export const USE_MOCK_COACH = false;
 
 export const BADGE_COLORS = {
   Q1: '#FFD166',

@@ -15,9 +15,13 @@ import {
   SkipBtn,
   StopAnswerBtn,
   NextQuestionBtn,
+  ShareResultBtn,
 } from './IconButton';
 import Waveform from './Waveform';
 import ScoreRing from './ScoreRing';
+import PaceCoach, { FillerPill } from './PaceCoach';
+import ReplayWithHighlights from './ReplayWithHighlights';
+import RadarBreakdown from './RadarBreakdown';
 
 function HoppingDot({ delay = 0, color }) {
   const hopAnim = useRef(new Animated.Value(0)).current;
@@ -97,7 +101,27 @@ export default function QuestionCard({
   onRollSurprise,
   onSkip,
   onNextQuestion,
+  onSharePress,
   isRolling = false,
+  isWeb = false,
+  // Feature 1: Coach
+  wpm = 140,
+  fillerCount = 0,
+  fillerPills = [],
+  onRemoveFillerPill,
+  // Feature 2: Replay
+  samples = [],
+  fillers = [],
+  totalMs = 4000,
+  avgWpm = 140,
+  audioSource = null,
+  // Feature 3: Radar
+  rubricScores = {
+    clarity: 80,
+    structure: 75,
+    confidence: 82,
+    relevance: 85,
+  },
   colors,
 }) {
   const dotBlinkAnim = useRef(new Animated.Value(1)).current;
@@ -143,7 +167,8 @@ export default function QuestionCard({
 
   // Question change slide animation
   useEffect(() => {
-    if (questionText === displayedQuestion && questionLabel === displayedLabel) return;
+    if (questionText === displayedQuestion && questionLabel === displayedLabel)
+      return;
 
     const useNative = Platform.OS !== 'web';
     // Slide out
@@ -179,7 +204,14 @@ export default function QuestionCard({
         }),
       ]).start();
     });
-  }, [questionText, questionLabel, displayedQuestion, displayedLabel, qSlideAnim, qOpacityAnim]);
+  }, [
+    questionText,
+    questionLabel,
+    displayedQuestion,
+    displayedLabel,
+    qSlideAnim,
+    qOpacityAnim,
+  ]);
 
   // Tag title mapping
   const tagTitle =
@@ -192,7 +224,15 @@ export default function QuestionCard({
       : 'Up next';
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card }]}>
+    <View
+      style={[
+        styles.card,
+        isWeb && styles.cardWeb,
+        { backgroundColor: colors.card },
+      ]}
+      accessibilityRole="region"
+      accessibilityLabel="Current question card"
+    >
       {/* Status Row */}
       <View style={styles.statusRow}>
         <View style={[styles.chip, { backgroundColor: colors.tomato }]}>
@@ -236,8 +276,12 @@ export default function QuestionCard({
           }}
         >
           <Text
-            style={[styles.qText, { color: colors.ink }]}
-            numberOfLines={2}
+            style={[
+              styles.qText,
+              isWeb && styles.qTextWeb,
+              { color: colors.ink },
+            ]}
+            numberOfLines={isWeb ? 3 : 2}
           >
             {displayedQuestion}
           </Text>
@@ -248,7 +292,12 @@ export default function QuestionCard({
       <View style={styles.panelContainer}>
         {/* 1. IDLE PANEL */}
         {state === 'idle' && (
-          <View style={styles.idlePanel}>
+          <View
+            style={[
+              styles.idlePanel,
+              isWeb && styles.idlePanelWeb,
+            ]}
+          >
             <SurpriseBtn
               onPress={onRollSurprise}
               colors={colors}
@@ -265,10 +314,31 @@ export default function QuestionCard({
           </View>
         )}
 
-        {/* 2. RECORDING PANEL */}
+        {/* 2. RECORDING PANEL (with Feature 1: PaceCoach & floating filler tags) */}
         {state === 'rec' && (
           <View style={styles.recPanel}>
+            {/* Floating Filler Tags */}
+            {fillerPills.map((pill) => (
+              <FillerPill
+                key={pill.id}
+                word={pill.word}
+                leftPercent={pill.leftPercent}
+                onFinished={() =>
+                  onRemoveFillerPill && onRemoveFillerPill(pill.id)
+                }
+                colors={colors}
+              />
+            ))}
+
             <Waveform barHeights={barHeights} color={colors.tomato} />
+
+            {/* Feature 1: Live Pace and Filler Word Coach */}
+            <PaceCoach
+              wpm={wpm}
+              fillerCount={fillerCount}
+              colors={colors}
+            />
+
             <StopAnswerBtn onPress={onStopRec} colors={colors} />
           </View>
         )}
@@ -287,9 +357,10 @@ export default function QuestionCard({
           </View>
         )}
 
-        {/* 4. RESULT PANEL */}
+        {/* 4. RESULT PANEL (with ScoreRing, Extras Grid: Replay + Radar, Action Buttons) */}
         {state === 'result' && (
           <View style={styles.resultPanel}>
+            {/* Top Score & Verdict Row */}
             <View style={styles.resTopRow}>
               <ScoreRing score={score} colors={colors} />
               <View style={styles.verdictCol}>
@@ -304,7 +375,44 @@ export default function QuestionCard({
                 </Text>
               </View>
             </View>
-            <NextQuestionBtn onPress={onNextQuestion} colors={colors} />
+
+            {/* Extras Grid: Left: Replay with Highlights, Right: Radar Breakdown */}
+            <View
+              style={[
+                styles.extrasGrid,
+                isWeb ? styles.extrasGridWeb : styles.extrasGridMobile,
+              ]}
+            >
+              <ReplayWithHighlights
+                samples={samples}
+                fillers={fillers}
+                totalMs={totalMs}
+                avgWpm={avgWpm}
+                audioSource={audioSource}
+                colors={colors}
+              />
+              <RadarBreakdown
+                clarity={rubricScores.clarity}
+                structure={rubricScores.structure}
+                confidence={rubricScores.confidence}
+                relevance={rubricScores.relevance}
+                colors={colors}
+              />
+            </View>
+
+            {/* Action Buttons: Next Question & Share Result */}
+            <View style={styles.actionsRow}>
+              <NextQuestionBtn
+                onPress={onNextQuestion}
+                colors={colors}
+                isWeb={isWeb}
+              />
+              <ShareResultBtn
+                onPress={onSharePress}
+                colors={colors}
+                isWeb={isWeb}
+              />
+            </View>
           </View>
         )}
       </View>
@@ -317,6 +425,13 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: RADII.card,
     padding: 16,
+  },
+  cardWeb: {
+    marginTop: 22,
+    borderRadius: 32,
+    paddingTop: 28,
+    paddingHorizontal: 32,
+    paddingBottom: 30,
   },
   statusRow: {
     minHeight: 26,
@@ -365,6 +480,11 @@ const styles = StyleSheet.create({
     minHeight: 53,
     fontWeight: '700',
   },
+  qTextWeb: {
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.6,
+  },
   panelContainer: {
     marginTop: 14,
   },
@@ -373,12 +493,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  idlePanelWeb: {
+    justifyContent: 'center',
+    gap: 56,
+  },
   recPanel: {
     flexDirection: 'column',
     alignItems: 'center',
+    position: 'relative',
+    width: '100%',
   },
   thinkPanel: {
-    height: 80,
+    height: 90,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -396,7 +522,7 @@ const styles = StyleSheet.create({
   },
   thinkText: {
     fontFamily: FONTS.outfit.semiBold,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   resultPanel: {
@@ -405,23 +531,41 @@ const styles = StyleSheet.create({
   resTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
   },
   verdictCol: {
     flex: 1,
     flexDirection: 'column',
-    gap: 3,
+    gap: 4,
   },
   verdictText: {
     fontFamily: FONTS.outfit.extraBold,
-    fontSize: 19,
+    fontSize: 22,
     fontWeight: '800',
     marginBottom: 4,
   },
   feedbackText: {
     fontFamily: FONTS.outfit.medium,
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: '500',
+  },
+  extrasGrid: {
+    marginTop: 20,
+    gap: 16,
+  },
+  extrasGridWeb: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  extrasGridMobile: {
+    flexDirection: 'column',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+    flexWrap: 'wrap',
   },
 });

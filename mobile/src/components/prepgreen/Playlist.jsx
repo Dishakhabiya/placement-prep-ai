@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,103 @@ function EqualiserBar({ duration = 900, color }) {
   );
 }
 
+function PlaylistRow({
+  q,
+  idx,
+  isSelected,
+  score,
+  onPress,
+  disabled,
+  isWeb,
+  colors,
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const badgeBg = BADGE_COLORS[q.n] || '#B9E4C9';
+  const statusText = score != null ? `Answered ${score}` : 'Not tried';
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      disabled={disabled}
+      onMouseEnter={() => Platform.OS === 'web' && setIsHovered(true)}
+      onMouseLeave={() => Platform.OS === 'web' && setIsHovered(false)}
+      accessibilityRole="button"
+      accessibilityLabel={`${q.s}, ${statusText}`}
+      style={[
+        styles.row,
+        isWeb && styles.rowWeb,
+        {
+          backgroundColor: colors.card,
+          transform: [{ translateX: isWeb && isHovered ? 3 : 0 }],
+        },
+      ]}
+    >
+      {/* Badge (34px web, 30px mobile) */}
+      <View
+        style={[
+          styles.badge,
+          isWeb && styles.badgeWeb,
+          { backgroundColor: badgeBg },
+        ]}
+      >
+        <Text
+          style={[
+            styles.badgeText,
+            isWeb && styles.badgeTextWeb,
+          ]}
+        >
+          {q.n}
+        </Text>
+      </View>
+
+      {/* Title */}
+      <Text
+        style={[
+          styles.title,
+          isWeb && styles.titleWeb,
+          { color: colors.ink },
+        ]}
+        numberOfLines={1}
+      >
+        {q.s}
+      </Text>
+
+      {/* Status */}
+      <Text
+        style={[
+          styles.statusText,
+          isWeb && styles.statusTextWeb,
+          { color: colors.mute },
+        ]}
+      >
+        {statusText}
+      </Text>
+
+      {/* Right Slot */}
+      <View style={[styles.slot, isWeb && styles.slotWeb]}>
+        {isSelected ? (
+          <View style={styles.eqsContainer}>
+            <EqualiserBar duration={900} color={colors.tomato} />
+            <EqualiserBar duration={700} color={colors.tomato} />
+            <EqualiserBar duration={1100} color={colors.tomato} />
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.playCircle,
+              isWeb && styles.playCircleWeb,
+              { backgroundColor: colors.ink },
+            ]}
+          >
+            <PlayTriangleIcon size={14} color={colors.card} />
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function Playlist({
   questions,
   currentIndex,
@@ -81,26 +178,29 @@ export default function Playlist({
   onSelectRow,
   colors,
   isIdle,
+  isWeb = false,
 }) {
-  const highlightY = useRef(new Animated.Value(currentIndex * 56)).current;
+  const rowStep = isWeb ? 66 : 56;
+  const highlightY = useRef(new Animated.Value(currentIndex * rowStep)).current;
 
   useEffect(() => {
     const useNative = Platform.OS !== 'web';
     Animated.timing(highlightY, {
-      toValue: currentIndex * 56,
+      toValue: currentIndex * rowStep,
       duration: 450,
       easing: Easing.bezier(0.3, 1.3, 0.5, 1),
       useNativeDriver: useNative,
     }).start();
-  }, [currentIndex, highlightY]);
+  }, [currentIndex, rowStep, highlightY]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isWeb && styles.containerWeb]}>
       {/* Sliding Highlight Border Box */}
       <Animated.View
         pointerEvents="none"
         style={[
           styles.highlight,
+          isWeb && styles.highlightWeb,
           {
             borderColor: colors.tomato,
             transform: [{ translateY: highlightY }],
@@ -111,49 +211,19 @@ export default function Playlist({
       {questions.map((q, idx) => {
         const isSelected = idx === currentIndex;
         const score = scores[idx];
-        const badgeBg = BADGE_COLORS[q.n] || '#B9E4C9';
-        const statusText = score != null ? `Answered ${score}` : 'Not tried';
 
         return (
-          <TouchableOpacity
+          <PlaylistRow
             key={`row-${idx}`}
-            activeOpacity={0.88}
+            q={q}
+            idx={idx}
+            isSelected={isSelected}
+            score={score}
             onPress={() => isIdle && onSelectRow(idx)}
             disabled={!isIdle || isSelected}
-            accessibilityRole="button"
-            accessibilityLabel={`${q.s}, ${statusText}`}
-            style={[styles.row, { backgroundColor: colors.card }]}
-          >
-            {/* 30x30 Badge */}
-            <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-              <Text style={styles.badgeText}>{q.n}</Text>
-            </View>
-
-            {/* Title */}
-            <Text style={[styles.title, { color: colors.ink }]} numberOfLines={1}>
-              {q.s}
-            </Text>
-
-            {/* Status */}
-            <Text style={[styles.statusText, { color: colors.mute }]}>
-              {statusText}
-            </Text>
-
-            {/* 30x30 Right Slot */}
-            <View style={styles.slot}>
-              {isSelected ? (
-                <View style={styles.eqsContainer}>
-                  <EqualiserBar duration={900} color={colors.tomato} />
-                  <EqualiserBar duration={700} color={colors.tomato} />
-                  <EqualiserBar duration={1100} color={colors.tomato} />
-                </View>
-              ) : (
-                <View style={[styles.playCircle, { backgroundColor: colors.ink }]}>
-                  <PlayTriangleIcon size={14} color={colors.card} />
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
+            isWeb={isWeb}
+            colors={colors}
+          />
         );
       })}
     </View>
@@ -166,6 +236,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 6,
   },
+  containerWeb: {
+    gap: 8,
+  },
   highlight: {
     position: 'absolute',
     left: 0,
@@ -175,6 +248,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 16,
     zIndex: 2,
+  },
+  highlightWeb: {
+    height: 58,
+    borderRadius: 18,
   },
   row: {
     height: 50,
@@ -189,8 +266,16 @@ const styles = StyleSheet.create({
       web: {
         cursor: 'pointer',
         userSelect: 'none',
+        transition: 'transform 0.15s ease',
       },
     }),
+  },
+  rowWeb: {
+    height: 58,
+    borderRadius: 18,
+    paddingLeft: 11,
+    paddingRight: 12,
+    gap: 12,
   },
   badge: {
     width: 30,
@@ -200,11 +285,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeWeb: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+  },
   badgeText: {
     fontFamily: FONTS.outfit.extraBold,
     fontSize: 13,
     fontWeight: '800',
     color: '#1B2E1F',
+  },
+  badgeTextWeb: {
+    fontSize: 14,
   },
   title: {
     flex: 1,
@@ -212,10 +305,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  titleWeb: {
+    fontSize: 16,
+  },
   statusText: {
     fontFamily: FONTS.outfit.medium,
     fontSize: 12.5,
     fontWeight: '500',
+  },
+  statusTextWeb: {
+    fontSize: 13.5,
   },
   slot: {
     width: 30,
@@ -224,6 +323,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  slotWeb: {
+    width: 32,
+    height: 32,
+  },
   playCircle: {
     width: 30,
     height: 30,
@@ -231,17 +334,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  playCircleWeb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   eqsContainer: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
     gap: 3,
   },
   eqBar: {
-    width: 4,
-    height: 20,
+    width: 5,
+    height: 22,
     borderRadius: 2,
   },
 });
