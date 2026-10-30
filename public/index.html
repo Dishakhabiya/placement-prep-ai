@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PrepAI – AI Interview Coach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Ambient floating blobs -->
+  <div class="ambient-blob blob-1" aria-hidden="true"></div>
+  <div class="ambient-blob blob-2" aria-hidden="true"></div>
+
+  <!-- Toast Notification / Alert Banner -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Main 3-Column Responsive Application Container -->
+  <div class="app s-idle" id="app">
+    
+    <!-- LEFT COLUMN: SIDEBAR -->
+    <aside id="sidebar">
+      <div class="side-top">
+        <div class="logo">PrepAI<i>.</i></div>
+        <div class="side-actions">
+          <button class="nav-btn" id="btn-history-toggle" aria-label="Open Practice History" title="View Past Attempts">
+            <span>📜</span><span class="history-badge" id="history-badge">0</span>
+          </button>
+          <button class="nav-btn" id="btn-tts-toggle" aria-label="Toggle Coach Voice Readout" title="Toggle Coach Audio Voice">
+            <span id="tts-icon">🔊</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ANIMATED EMOJI AVATAR (Changes state: idle -> listening -> thinking -> answering -> done) -->
+      <div class="avatar" id="avatar-container" aria-label="AI Coach Avatar">
+        <div class="orb"></div>
+        <div class="ring"></div>
+        <div class="ring b"></div>
+        
+        <!-- Satellites / Orbiting particles -->
+        <div class="sat" id="s1">⭐</div>
+        <div class="sat" id="s2">💡</div>
+        <div class="sat" id="s3">✨</div>
+        <div class="sat ear" id="ear" title="Listening to microphone">👂</div>
+        
+        <!-- Drop shade -->
+        <div class="shade"></div>
+        
+        <!-- Emoji Face -->
+        <div class="face" id="face">😊</div>
+        
+        <!-- Mini Equalizer bars -->
+        <div class="eq">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+
+      <!-- Question List -->
+      <div class="lab-row">
+        <span class="lab">Pick a question</span>
+        <span class="sub-lab" id="q-count">4 questions</span>
+      </div>
+      
+      <div id="list" class="q-list" role="listbox" aria-label="Interview questions">
+        <!-- Dynamically populated from /api/questions -->
+      </div>
+
+      <!-- Surprise Me Random Question Button -->
+      <button class="dice" id="dice" aria-label="Pick a random interview question">
+        <span id="dice-icon">🎲</span>Surprise me
+      </button>
+    </aside>
+
+    <!-- MIDDLE COLUMN: MAIN INTERACTION STAGE -->
+    <main>
+      <!-- Top Status Bar -->
+      <div class="top">
+        <div class="pill">
+          <i></i><span id="st">Ready</span>
+        </div>
+        <div class="top-tag">Your interview coach</div>
+      </div>
+
+      <!-- Dynamic Headline -->
+      <h1 id="h1">What shall we practise today?</h1>
+
+      <!-- Active Question Display Card -->
+      <div class="qbox" id="qbox" tabindex="0" aria-label="Current interview question">
+        Tell me about yourself.
+      </div>
+
+      <!-- Live Interactive Stage (Transcript, Waveform, Thinking, Streaming Answer) -->
+      <div class="live" id="live" aria-live="polite">
+        <div class="tr" id="intro-hint">
+          <em>Tap the mic and answer out loud, or type below.</em>
+        </div>
+      </div>
+
+      <!-- Bottom Audio & Text Controls Bar -->
+      <div class="ctrl">
+        <button class="mic" id="mic" aria-label="Start recording speech" title="Click to speak your answer">
+          🎙️
+        </button>
+        <div class="typebar" id="typebar">
+          <label for="inp" class="sr-only">Type your answer</label>
+          <input id="inp" type="text" placeholder="Or type your answer…" autocomplete="off" maxlength="5000">
+          <div class="ti" id="ti" aria-label="Typing indicator">
+            <i></i><i></i><i></i>
+          </div>
+          <button class="send" id="send" aria-label="Submit answer" title="Send answer for feedback">
+            ↑
+          </button>
+        </div>
+      </div>
+
+      <!-- Browser capability & helper notice -->
+      <div class="speech-support-notice" id="speech-support-notice" style="display: none;">
+        <span>ℹ️</span> Web Speech API is not enabled in this browser. You can type your answer smoothly below!
+      </div>
+    </main>
+
+    <!-- RIGHT COLUMN: LIVE FEEDBACK & COACHING PANEL -->
+    <div class="rt" id="feedback-panel">
+      <div class="rt-head">
+        <h2>Live feedback</h2>
+        <span class="rt-status-pill" id="rt-pill">Waiting</span>
+      </div>
+      
+      <div id="fb" class="empty">
+        Answer a question and your scores will fill in here. 📈
+      </div>
+
+      <!-- Quick Action Buttons when completed -->
+      <div class="rt-actions" id="rt-actions" style="display: none;">
+        <button class="btn-action" id="btn-retry-q">
+          <span>🔄</span> Try Again
+        </button>
+        <button class="btn-action primary" id="btn-next-q">
+          <span>✨</span> Next Question
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PRACTICE HISTORY MODAL / DRAWER -->
+  <div class="modal-overlay" id="history-modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="serif">📜 Practice History</span>
+          <small id="history-summary">Saved attempts</small>
+        </div>
+        <button class="btn-close" id="btn-close-history" aria-label="Close history modal">✕</button>
+      </div>
+
+      <div class="modal-body" id="history-list">
+        <!-- Rendered dynamically -->
+        <div class="empty-history">No practice sessions yet. Start your first answer! 🚀</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-clear" id="btn-clear-history">Clear History</button>
+        <button class="btn-primary" id="btn-close-history-bottom">Back to Practice</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

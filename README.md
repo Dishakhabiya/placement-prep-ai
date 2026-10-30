@@ -1,9 +1,60 @@
+# PrepAI: AI Interview Coach & Speaking Assistant
+
+A full-stack, responsive AI interview coach web application running on port `8083`. Built with **Node.js 20 + Express**, vanilla HTML/CSS/JS with zero framework dependencies, **Web Speech API** for speech input, **better-sqlite3** for practice history, and multi-provider **LLM API** integration (OpenAI, Gemini, Anthropic, Ollama, and offline Heuristics).
+
+---
+
+## ⚡ PrepAI Quickstart
+
+### 1. Installation
+```bash
+npm install
+```
+
+### 2. Configure Environment
+```bash
+cp .env.example .env
+```
+Edit `.env` if using an external LLM API (defaults to offline intelligent heuristics):
+```env
+PORT=8083
+LLM_PROVIDER=mock
+LLM_API_KEY=
+LLM_MODEL=gpt-4o-mini
+```
+
+### 3. Run the Server
+```bash
+npm start
+# or development mode:
+npm run dev
+```
+
+Open in your browser: **[http://localhost:8083](http://localhost:8083)**
+
+---
+
+## 🌐 API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Server and LLM provider health check |
+| `GET` | `/api/questions` | List standard interview questions |
+| `GET` | `/api/questions/random` | Pick a random question |
+| `POST` | `/api/feedback` | Evaluate candidate answer `{ questionId, answer }` |
+| `GET` | `/api/feedback/stream` | Server-Sent Events (SSE) live streaming feedback |
+| `GET` | `/api/history` | List candidate practice history attempts |
+| `DELETE` | `/api/history` | Clear practice history |
+
+---
+
 # AI-Powered Placement Interview & Speaking Assistant
 ## Module 1: Resume & Job Description (JD) Intelligence
 
 > **Person 1 Subsystem:** Automated Resume & JD Parsing, Taxonomy-Driven Skill Extraction, Gap & Match Scoring, and Ranked Interview Topic Generation.
 
 ---
+
 
 ## 📌 1. Module Overview
 

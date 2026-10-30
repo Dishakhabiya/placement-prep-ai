@@ -1,0 +1,18 @@
+[
+  {
+    "id": "1793387367344",
+    "question": "Tell me about yourself.",
+    "answer": "I am an engineer with 3 years experience building APIs.",
+    "score": 5,
+    "strengths": [
+      "Direct answer that addressed the core intent of the question.",
+      "Clear tone with positive personal ownership."
+    ],
+    "improvements": [
+      "Consider backing your answer with 1 quantified metric or project outcome.",
+      "Anchor your response using the STAR method (Situation, Task, Action, Result)."
+    ],
+    "sampleAnswer": "Start by framing the situation clearly, describe the specific technical or strategic action you took, and conclude with the measurable positive outcome for your team or customer.",
+    "timestamp": "2026-10-30T19:09:27.344Z"
+  }
+]
