@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>PrepAI Desktop</title>
+<script src="e73a26d4-f82b-4b11-95e7-04a6491d4984"></script>
+<meta name="hz:slide-selector" content="[data-canvas-width]"><meta name="hz:canvas-width" content="1440"><meta name="hz:canvas-height" content="900"></head>
+<body>
+<x-dc>
+<helmet>
+<style>/* latin-ext */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6z9mXgjU0.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("5c75da37-ca16-4c64-a1d2-b602f5815c02") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6z9mXgjU0.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("5c75da37-ca16-4c64-a1d2-b602f5815c02") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6z9mXgjU0.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("5c75da37-ca16-4c64-a1d2-b602f5815c02") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0KxCBTeP2Xz5fU8w.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0KxCFTeP2Xz5fU8w.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("52c65be9-06bf-475f-85ea-70acc3d047c9") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0KxCBTeP2Xz5fU8w.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0KxCFTeP2Xz5fU8w.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("52c65be9-06bf-475f-85ea-70acc3d047c9") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0;background:#0B3C49}
+.serif{font-family:'Fraunces',Georgia,serif}
+.card{background:#F6E7C8;border-radius:28px;padding:28px;display:flex;flex-direction:column;justify-content:space-between;min-height:260px;color:#0B3C49;box-sizing:border-box}
+.pill{font-size:13px;font-weight:700;padding:8px 16px;border-radius:999px;color:#0B3C49}
+.go{display:flex;align-items:center;gap:12px;font-weight:700;font-size:16px}
+.arrow{width:48px;height:48px;border-radius:50%;background:#0B3C49;display:flex;align-items:center;justify-content:center;border:0;cursor:pointer}
+.nav{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;color:#B9D5D9;font-size:16px;font-weight:500;text-decoration:none}
+.nav:hover{background:#12505F}
+.dot{width:12px;height:12px;border-radius:50%;background:#FF7A3D;display:block;animation:wave 1.6s ease-in-out infinite}
+.dot:nth-child(2){animation-delay:.12s}.dot:nth-child(3){animation-delay:.24s}.dot:nth-child(4){animation-delay:.36s}.dot:nth-child(5){animation-delay:.48s}.dot:nth-child(6){animation-delay:.6s}
+@keyframes wave{0%,100%{transform:scale(.7);opacity:.45}50%{transform:scale(1.25);opacity:1}}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-12px) rotate(3deg)}}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(255,122,61,.55),0 0 0 18px #0F4553}100%{box-shadow:0 0 0 46px rgba(255,122,61,0),0 0 0 18px #0F4553}}
+h1,.nav{animation:fade .7s both}
+.card{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;transition:transform .25s ease,box-shadow .25s ease}
+.card:nth-child(1){animation-delay:.15s}.card:nth-child(2){animation-delay:.27s}.card:nth-child(3){animation-delay:.39s}.card:nth-child(4){animation-delay:.51s}
+.card:hover{transform:translateY(-8px) rotate(-.6deg);box-shadow:0 24px 40px rgba(0,0,0,.3)}
+.arrow{transition:transform .25s ease}
+.card:hover .arrow{transform:translateX(6px) scale(1.08)}
+.float{animation:bob 4s ease-in-out infinite;transform-origin:50% 90%}
+.mic{box-shadow:0 0 0 18px #0F4553;animation:ring 2s ease-out infinite;transition:transform .2s ease}
+.mic:hover{transform:scale(1.08)}
+.mic:active{transform:scale(.95)}
+.nav{transition:background .2s ease,transform .2s ease}.nav:hover{transform:translateX(4px)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="min-height:900px;display:flex;background:#0B3C49;font-family:'DM Sans',system-ui,sans-serif;color:#F6E7C8" data-canvas-width="1440" data-canvas-height="900" data-document-role="page" data-label="PrepAI – Desktop">
+
+<aside style="width:260px;flex:none;box-sizing:border-box;padding:40px 24px;display:flex;flex-direction:column;gap:40px;border-right:1px solid #1B5565">
+<div class="serif" style="font-size:36px;font-weight:800;padding-left:16px">PrepAI<span style="color:#FF7A3D">.</span></div>
+<nav style="display:flex;flex-direction:column;gap:6px">
+<a class="nav" href="#" style="background:#12505F;color:#F6E7C8"><svg width="22" height="22" sc-camel-view-box="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>Practise</a>
+<a class="nav" href="#"><svg width="22" height="22" sc-camel-view-box="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"></path></svg>History</a>
+<a class="nav" href="#"><svg width="22" height="22" sc-camel-view-box="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"></path></svg>Saved questions</a>
+</nav>
+</aside>
+
+<main style="flex:1;min-width:0;box-sizing:border-box;padding:48px 64px 40px;display:flex;flex-direction:column;gap:36px">
+
+<header style="display:flex;justify-content:space-between;align-items:center;gap:32px">
+<div>
+<div style="font-size:15px;font-weight:700;letter-spacing:.14em;color:#9CC3C9">YOUR INTERVIEW COACH</div>
+<h1 class="serif" style="margin:12px 0 0;font-size:64px;line-height:1.05;font-weight:800">What shall we<br>practise today?</h1>
+</div>
+<svg class="float" width="180" height="170" sc-camel-view-box="0 0 180 170" aria-hidden="true"><path d="M40 20h90a24 24 0 0 1 24 24v50a24 24 0 0 1-24 24H90l-34 32 6-32h-22a24 24 0 0 1-24-24V44a24 24 0 0 1 24-24z" fill="#FF7A3D"></path><path d="M26 70a56 56 0 0 1 112 0" fill="none" stroke="#F6E7C8" stroke-width="12" stroke-linecap="round"></path><rect x="14" y="62" width="16" height="34" rx="8" fill="#F6E7C8"></rect><rect x="134" y="62" width="16" height="34" rx="8" fill="#F6E7C8"></rect><circle cx="62" cy="64" r="7" fill="#0B3C49"></circle><circle cx="102" cy="64" r="7" fill="#0B3C49"></circle><path d="M64 84q18 14 36 0" fill="none" stroke="#0B3C49" stroke-width="6" stroke-linecap="round"></path></svg>
+</header>
+
+<section aria-label="Pick a card" style="display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;letter-spacing:.14em;color:#9CC3C9"><span>PICK A CARD</span><span>SWIPE</span></div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px">
+
+<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><span class="serif" style="font-size:64px;font-weight:800;line-height:1">Q1</span><span class="pill" style="background:#9FE0CB">Intro</span></div>
+<div class="serif" style="font-size:26px;font-weight:800;line-height:1.2">Tell me about yourself.</div>
+<div class="go" style="justify-content:space-between">Practise this<button class="arrow" aria-label="Practise Q1"><svg width="20" height="20" sc-camel-view-box="0 0 24 24" fill="none" stroke="#F6E7C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div></div>
+
+<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><span class="serif" style="font-size:64px;font-weight:800;line-height:1">Q2</span><span class="pill" style="background:#FFD36E">Self-awareness</span></div>
+<div class="serif" style="font-size:26px;font-weight:800;line-height:1.2">What are your biggest strengths and weaknesses?</div>
+<div class="go" style="justify-content:space-between">Practise this<button class="arrow" aria-label="Practise Q2"><svg width="20" height="20" sc-camel-view-box="0 0 24 24" fill="none" stroke="#F6E7C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div></div>
+
+<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><span class="serif" style="font-size:64px;font-weight:800;line-height:1">Q3</span><span class="pill" style="background:#F4B5A0">Your turn</span></div>
+<div class="serif" style="font-size:26px;font-weight:800;line-height:1.2">What should I ask the interviewer?</div>
+<div class="go" style="justify-content:space-between">Practise this<button class="arrow" aria-label="Practise Q3"><svg width="20" height="20" sc-camel-view-box="0 0 24 24" fill="none" stroke="#F6E7C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div></div>
+
+<div class="card" style="background:#FF7A3D"><div style="display:flex;justify-content:space-between;align-items:flex-start"><svg width="56" height="56" sc-camel-view-box="0 0 24 24" fill="none" stroke="#0B3C49" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><circle cx="8.5" cy="8.5" r="1.3" fill="#0B3C49"></circle><circle cx="15.5" cy="15.5" r="1.3" fill="#0B3C49"></circle><circle cx="12" cy="12" r="1.3" fill="#0B3C49"></circle><circle cx="15.5" cy="8.5" r="1.3" fill="#0B3C49"></circle><circle cx="8.5" cy="15.5" r="1.3" fill="#0B3C49"></circle></svg><span class="pill" style="background:#F6E7C8">Random</span></div>
+<div><div class="serif" style="font-size:26px;font-weight:800;line-height:1.2">Surprise me</div><div style="margin-top:8px;font-size:16px">A random question, just for you.</div></div>
+<div class="go" style="justify-content:space-between">Roll the dice<button class="arrow" aria-label="Roll the dice"><svg width="20" height="20" sc-camel-view-box="0 0 24 24" fill="none" stroke="#F6E7C8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div></div>
+
+</div>
+</section>
+
+<section style="margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:14px">
+<div style="display:flex;align-items:center;gap:28px">
+<div style="display:flex;gap:14px"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+<button class="mic" aria-label="Tap and ask out loud" style="width:96px;height:96px;border-radius:50%;background:#FF7A3D;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="40" height="40" sc-camel-view-box="0 0 24 24" fill="none" stroke="#0B3C49" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+<div style="display:flex;gap:14px"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+</div>
+<div style="font-size:17px;color:#B9D5D9;margin-top:10px">Tap and ask out loud</div>
+<div style="width:100%;max-width:720px;box-sizing:border-box;display:flex;align-items:center;gap:12px;background:#12505F;border:2px solid #1F6070;border-radius:999px;padding:8px 8px 8px 28px">
+<label for="q" style="position:absolute;left:-9999px">Type your question</label>
+<input id="q" type="text" placeholder="Or type your question…" style="flex:1;background:transparent;border:0;outline:0;color:#F6E7C8;font:inherit;font-size:17px;min-height:44px">
+<button aria-label="Send" style="width:52px;height:52px;border-radius:50%;background:#F6E7C8;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" sc-camel-view-box="0 0 24 24" fill="none" stroke="#0B3C49" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+</div>
+</section>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>

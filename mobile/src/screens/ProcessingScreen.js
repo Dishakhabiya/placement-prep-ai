@@ -6,8 +6,10 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { useProfileStore } from '../store/profileStore';
+import Caricatures from '../assets/caricatures';
 
 export default function ProcessingScreen({ navigation }) {
   const { loadingStage, error, clearError } = useProfileStore();
@@ -31,13 +33,21 @@ export default function ProcessingScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.loadingContainer}>
+          <View style={styles.card}>
+            <Image
+              source={Caricatures.codeInspection || Caricatures.analyticsChart}
+              style={styles.processCaricature}
+              resizeMode="contain"
+            />
+
             <View style={styles.pulseContainer}>
-              <ActivityIndicator size="large" color="#38BDF8" />
+              <ActivityIndicator size="small" color="#FFC82C" />
             </View>
 
             <Text style={styles.title}>Processing Intelligence Pipeline</Text>
-            <Text style={styles.stageText}>{loadingStage || 'Extracting and analyzing profile...'}</Text>
+            <Text style={styles.stageText}>
+              {loadingStage || 'Extracting and analyzing profile...'}
+            </Text>
 
             <View style={styles.stepsList}>
               <View style={styles.stepRow}>
@@ -67,7 +77,7 @@ export default function ProcessingScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8F9FA',
   },
   container: {
     flex: 1,
@@ -75,47 +85,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingContainer: {
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 28,
     alignItems: 'center',
     width: '100%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  processCaricature: {
+    width: 140,
+    height: 110,
+    marginBottom: 16,
   },
   pulseContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF9C3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#38BDF8',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE047',
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#F8FAFC',
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 6,
     textAlign: 'center',
   },
   stageText: {
-    fontSize: 14,
-    color: '#38BDF8',
-    fontWeight: '600',
+    fontSize: 13,
+    color: '#854D0E',
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   stepsList: {
     width: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E5E7EB',
+    gap: 10,
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   checkIcon: {
     fontSize: 14,
@@ -123,17 +149,19 @@ const styles = StyleSheet.create({
   },
   stepText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#4B5563',
     flex: 1,
+    fontWeight: '500',
   },
   errorContainer: {
     alignItems: 'center',
     width: '100%',
-    backgroundColor: '#1E293B',
-    padding: 24,
+    maxWidth: 500,
+    backgroundColor: '#FFFFFF',
+    padding: 28,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#FECACA',
   },
   errorIcon: {
     fontSize: 40,
@@ -142,25 +170,25 @@ const styles = StyleSheet.create({
   errorHeading: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#F87171',
+    color: '#B91C1C',
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 13,
-    color: '#CBD5E1',
+    color: '#4B5563',
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 20,
   },
   retryBtn: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#111827',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
   },
   retryBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: '#FFC82C',
+    fontWeight: '800',
     fontSize: 14,
   },
 });

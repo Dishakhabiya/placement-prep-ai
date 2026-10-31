@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  Alert,
+  StatusBar,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useProfileStore } from '../store/profileStore';
 import ErrorBanner from '../components/ErrorBanner';
+import Caricatures from '../assets/caricatures';
 
 const INTERVIEW_MODES = [
   { id: 'mixed', label: 'Mixed', desc: 'Holistic mix of technical, resume projects & behavioral' },
@@ -55,7 +58,11 @@ Responsibilities:
 };
 
 export default function UploadScreen({ navigation }) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedJdFile, setSelectedJdFile] = useState(null);
   const [jdText, setJdText] = useState('');
   const [selectedMode, setSelectedMode] = useState('mixed');
   const [validationError, setValidationError] = useState(null);
@@ -88,7 +95,34 @@ export default function UploadScreen({ navigation }) {
     }
   };
 
+  const handlePickJdDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/msword',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['pdf', 'docx'].includes(ext)) {
+          setValidationError('Job Description file must be a PDF (.pdf) or Word (.docx).');
+          return;
+        }
+        setSelectedJdFile(file);
+        setValidationError(null);
+      }
+    } catch (e) {
+      setValidationError('Failed to select JD document: ' + e.message);
+    }
+  };
+
   const handleApplySampleJD = (key) => {
+    setSelectedJdFile(null);
     setJdText(SAMPLE_JDS[key]);
     setValidationError(null);
   };
@@ -98,8 +132,8 @@ export default function UploadScreen({ navigation }) {
       setValidationError('Please select a resume file (PDF or DOCX).');
       return;
     }
-    if (!jdText.trim()) {
-      setValidationError('Please paste or select a Job Description.');
+    if (!jdText.trim() && !selectedJdFile) {
+      setValidationError('Please provide a Job Description: paste text or upload a PDF/DOCX.');
       return;
     }
 
@@ -112,6 +146,7 @@ export default function UploadScreen({ navigation }) {
       await submitResumeAndJD({
         file: selectedFile,
         jdText: jdText.trim(),
+        jdFile: selectedJdFile,
         mode: selectedMode,
       });
       navigation.replace('ReviewProfile');
@@ -122,116 +157,197 @@ export default function UploadScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Step 1: Resume Upload */}
-        <View style={styles.card}>
-          <Text style={styles.stepTitle}>1. Upload Candidate Resume</Text>
-          <Text style={styles.stepSubtitle}>Supported formats: PDF (.pdf) or Word (.docx)</Text>
-
-          {selectedFile ? (
-            <View style={styles.fileSelectedBox}>
-              <View style={styles.fileInfo}>
-                <Text style={styles.fileName} numberOfLines={1}>
-                  📄 {selectedFile.name}
-                </Text>
-                <Text style={styles.fileSize}>
-                  {selectedFile.size ? `${(selectedFile.size / 1024).toFixed(1)} KB` : 'Ready'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.changeFileBtn}
-                onPress={() => setSelectedFile(null)}
-              >
-                <Text style={styles.changeFileText}>Change</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.uploadArea} onPress={handlePickDocument}>
-              <Text style={styles.uploadIcon}>📁</Text>
-              <Text style={styles.uploadMainText}>Tap to select resume file</Text>
-              <Text style={styles.uploadSubText}>Max size: 10MB</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Step 2: Target Job Description */}
-        <View style={styles.card}>
-          <View style={styles.jdHeader}>
-            <Text style={styles.stepTitle}>2. Target Job Description</Text>
-            <Text style={styles.charCount}>{jdText.length} chars</Text>
-          </View>
-          <Text style={styles.stepSubtitle}>Paste the target role's job description or select a preset:</Text>
-
-          {/* Sample Presets */}
-          <View style={styles.presetRow}>
-            <TouchableOpacity
-              style={styles.presetChip}
-              onPress={() => handleApplySampleJD('backend')}
-            >
-              <Text style={styles.presetText}>+ Backend Eng</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.presetChip}
-              onPress={() => handleApplySampleJD('frontend')}
-            >
-              <Text style={styles.presetText}>+ Frontend React</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.presetChip}
-              onPress={() => handleApplySampleJD('ml')}
-            >
-              <Text style={styles.presetText}>+ ML & NLP</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TextInput
-            style={styles.jdInput}
-            multiline
-            numberOfLines={6}
-            placeholder="Paste Job Description here (Requirements, Responsibilities, Skills)..."
-            placeholderTextColor="#64748B"
-            value={jdText}
-            onChangeText={setJdText}
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Step 3: Interview Mode Selection */}
-        <View style={styles.card}>
-          <Text style={styles.stepTitle}>3. Select Interview Mode</Text>
-          <Text style={styles.stepSubtitle}>Tunes the interview topic ranking logic</Text>
-
-          <View style={styles.modesList}>
-            {INTERVIEW_MODES.map((mode) => {
-              const isSelected = selectedMode === mode.id;
-              return (
-                <TouchableOpacity
-                  key={mode.id}
-                  style={[styles.modeItem, isSelected && styles.modeItemSelected]}
-                  onPress={() => setSelectedMode(mode.id)}
-                >
-                  <View style={styles.modeRadio}>
-                    {isSelected && <View style={styles.modeRadioInner} />}
-                  </View>
-                  <View style={styles.modeContent}>
-                    <Text style={[styles.modeLabel, isSelected && styles.modeLabelSelected]}>
-                      {mode.label}
-                    </Text>
-                    <Text style={styles.modeDesc}>{mode.desc}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Validation or Error Message */}
+        {/* Validation or API Errors */}
         {validationError && (
-          <ErrorBanner message={validationError} onDismiss={() => setValidationError(null)} />
+          <View style={styles.errorAlert}>
+            <Text style={styles.errorAlertText}>⚠️ {validationError}</Text>
+          </View>
         )}
         {error && <ErrorBanner message={error} onDismiss={clearError} />}
 
-        {/* Submit CTA */}
+        {/* ================= STEP 1: RESUME UPLOAD ================= */}
+        <View style={styles.stepCard}>
+          <View style={styles.stepCardHeader}>
+            <View style={styles.stepNumberBadge}>
+              <Text style={styles.stepNumberText}>1</Text>
+            </View>
+            <View style={styles.stepHeaderTextWrap}>
+              <Text style={styles.stepTitle}>Upload Candidate Resume</Text>
+              <Text style={styles.stepSubtitle}>Supported formats: PDF (.pdf) or Word (.docx)</Text>
+            </View>
+          </View>
+
+          <View style={[styles.stepBodyRow, !isWide && styles.stepBodyCol]}>
+            {/* Dashed Upload Box */}
+            <View style={styles.uploadAreaWrapper}>
+              {selectedFile ? (
+                <View style={styles.fileSelectedBox}>
+                  <View style={styles.fileInfo}>
+                    <Text style={styles.fileSelectedIcon}>📄</Text>
+                    <View>
+                      <Text style={styles.fileName} numberOfLines={1}>
+                        {selectedFile.name}
+                      </Text>
+                      <Text style={styles.fileSize}>
+                        {selectedFile.size ? `${(selectedFile.size / 1024).toFixed(1)} KB` : 'Ready for extraction'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.changeFileBtn}
+                    onPress={() => setSelectedFile(null)}
+                  >
+                    <Text style={styles.changeFileText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.dashedBox} onPress={handlePickDocument}>
+                  <View style={styles.dashedFolderIconWrap}>
+                    <Text style={styles.dashedFolderIcon}>📂</Text>
+                  </View>
+                  <Text style={styles.uploadMainPrompt}>Tap to select resume file</Text>
+                  <Text style={styles.uploadSubPrompt}>Max size: 10MB</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Right Caricature */}
+            <View style={styles.caricatureCol}>
+              <Image
+                source={Caricatures.step1Resume || Caricatures.puzzleSkills}
+                style={styles.caricatureImg}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* ================= STEP 2: JOB DESCRIPTION ================= */}
+        <View style={styles.stepCard}>
+          <View style={styles.stepCardHeader}>
+            <View style={styles.stepNumberBadge}>
+              <Text style={styles.stepNumberText}>2</Text>
+            </View>
+            <View style={styles.stepHeaderTextWrap}>
+              <Text style={styles.stepTitle}>Target Job Description</Text>
+              <Text style={styles.stepSubtitle}>
+                Paste the target role's job description or select a preset:
+              </Text>
+            </View>
+            <Text style={styles.charCounterBadge}>
+              {selectedJdFile ? 'Doc Attached' : `${jdText.length} chars`}
+            </Text>
+          </View>
+
+          {/* Preset Buttons */}
+          <View style={styles.presetsRow}>
+            <TouchableOpacity
+              style={styles.presetPill}
+              onPress={() => handleApplySampleJD('backend')}
+            >
+              <Text style={styles.presetPillText}>+ Backend Eng</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.presetPill}
+              onPress={() => handleApplySampleJD('frontend')}
+            >
+              <Text style={styles.presetPillText}>+ Frontend React</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.presetPill}
+              onPress={() => handleApplySampleJD('ml')}
+            >
+              <Text style={styles.presetPillText}>+ ML & NLP</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.presetPill, styles.jdDocPill]}
+              onPress={handlePickJdDocument}
+            >
+              <Text style={styles.jdDocPillText}>📎 {selectedJdFile ? selectedJdFile.name : 'Upload JD File'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.stepBodyRow, !isWide && styles.stepBodyCol]}>
+            <View style={styles.textAreaWrapper}>
+              <TextInput
+                style={styles.jdTextInput}
+                placeholder="Paste Job Description here (Requirements, Responsibilities, Skills)..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={6}
+                value={jdText}
+                onChangeText={(text) => {
+                  setJdText(text);
+                  setSelectedJdFile(null);
+                }}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Right Caricature */}
+            <View style={styles.caricatureCol}>
+              <Image
+                source={Caricatures.step2JD || Caricatures.laptopHeadset}
+                style={styles.caricatureImg}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* ================= STEP 3: INTERVIEW MODE ================= */}
+        <View style={styles.stepCard}>
+          <View style={styles.stepCardHeader}>
+            <View style={styles.stepNumberBadge}>
+              <Text style={styles.stepNumberText}>3</Text>
+            </View>
+            <View style={styles.stepHeaderTextWrap}>
+              <Text style={styles.stepTitle}>Select Interview Mode</Text>
+              <Text style={styles.stepSubtitle}>Tunes the interview topic ranking logic</Text>
+            </View>
+          </View>
+
+          <View style={[styles.stepBodyRow, !isWide && styles.stepBodyCol]}>
+            {/* Radio Options */}
+            <View style={styles.modesWrapper}>
+              {INTERVIEW_MODES.map((mode) => {
+                const isSelected = selectedMode === mode.id;
+                return (
+                  <TouchableOpacity
+                    key={mode.id}
+                    style={[styles.modeRow, isSelected && styles.modeRowSelected]}
+                    onPress={() => setSelectedMode(mode.id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                      {isSelected && <View style={styles.radioInner} />}
+                    </View>
+                    <View style={styles.modeTextWrap}>
+                      <Text style={[styles.modeLabel, isSelected && styles.modeLabelSelected]}>
+                        {mode.label}
+                      </Text>
+                      <Text style={styles.modeDesc}>{mode.desc}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Right Caricature */}
+            <View style={styles.caricatureCol}>
+              <Image
+                source={Caricatures.step3Mode || Caricatures.checklistSearch}
+                style={styles.caricatureImgMode}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom Primary Submit Button */}
         <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
           <Text style={styles.submitBtnText}>Analyze Resume & Match JD →</Text>
         </TouchableOpacity>
@@ -243,191 +359,306 @@ export default function UploadScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8F9FA',
   },
   container: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
+    maxWidth: 1040,
+    width: '100%',
+    alignSelf: 'center',
   },
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+  errorAlert: {
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorAlertText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Step Card
+  stepCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  stepCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  stepNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: '#4F46E5',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  stepHeaderTextWrap: {
+    flex: 1,
   },
   stepTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
+    fontWeight: '800',
+    color: '#111827',
   },
   stepSubtitle: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#6B7280',
     marginTop: 2,
-    marginBottom: 12,
   },
-  uploadArea: {
-    borderWidth: 2,
-    borderColor: '#3B82F6',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 24,
+  charCounterBadge: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  stepBodyRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    justifyContent: 'space-between',
   },
-  uploadIcon: {
-    fontSize: 32,
+  stepBodyCol: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+
+  // Step 1 Upload
+  uploadAreaWrapper: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  dashedBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#C7D2FE',
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashedFolderIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  uploadMainText: {
+  dashedFolderIcon: {
+    fontSize: 24,
+  },
+  uploadMainPrompt: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#38BDF8',
+    color: '#4F46E5',
+    marginBottom: 4,
   },
-  uploadSubText: {
+  uploadSubPrompt: {
     fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
+    color: '#9CA3AF',
   },
   fileSelectedBox: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    padding: 12,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    padding: 14,
   },
   fileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
+  },
+  fileSelectedIcon: {
+    fontSize: 22,
     marginRight: 10,
   },
   fileName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#34D399',
+    color: '#1E3A8A',
   },
   fileSize: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#3B82F6',
     marginTop: 2,
   },
   changeFileBtn: {
-    backgroundColor: '#334155',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
   changeFileText: {
     fontSize: 12,
-    color: '#F1F5F9',
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#1E40AF',
   },
-  jdHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  charCount: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  presetRow: {
+
+  // Step 2 Presets & Text Area
+  presetsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
-  presetChip: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 10,
+  presetPill: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 16,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 14,
-    marginRight: 8,
-    marginBottom: 6,
   },
-  presetText: {
-    fontSize: 11,
-    color: '#38BDF8',
-    fontWeight: '600',
+  presetPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4F46E5',
   },
-  jdInput: {
-    backgroundColor: '#0F172A',
+  jdDocPill: {
+    backgroundColor: '#FEF9C3',
+  },
+  jdDocPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#854D0E',
+  },
+  textAreaWrapper: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  jdTextInput: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#F8FAFC',
-    padding: 12,
+    borderColor: '#E5E7EB',
+    padding: 14,
     fontSize: 13,
-    minHeight: 120,
+    color: '#111827',
+    minHeight: 110,
     lineHeight: 18,
   },
-  modesList: {
-    marginTop: 4,
+
+  // Step 3 Modes
+  modesWrapper: {
+    flex: 1,
+    paddingRight: 16,
+    gap: 8,
   },
-  modeItem: {
+  modeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0F172A',
-    marginBottom: 8,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  modeItemSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  modeRowSelected: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
   },
-  modeRadio: {
+  radioOuter: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#64748B',
-    alignItems: 'center',
+    borderColor: '#9CA3AF',
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  modeRadioInner: {
+  radioOuterSelected: {
+    borderColor: '#4F46E5',
+  },
+  radioInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#4F46E5',
   },
-  modeContent: {
+  modeTextWrap: {
     flex: 1,
   },
   modeLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#CBD5E1',
+    color: '#111827',
   },
   modeLabelSelected: {
-    color: '#38BDF8',
+    color: '#4F46E5',
   },
   modeDesc: {
     fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
+    color: '#6B7280',
+    marginTop: 1,
   },
+
+  // Caricatures Col
+  caricatureCol: {
+    width: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caricatureImg: {
+    width: 130,
+    height: 95,
+  },
+  caricatureImgMode: {
+    width: 130,
+    height: 115,
+  },
+
+  // Submit Button
   submitBtn: {
     backgroundColor: '#3B82F6',
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 8,
     shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
+    marginTop: 6,
   },
   submitBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
 });

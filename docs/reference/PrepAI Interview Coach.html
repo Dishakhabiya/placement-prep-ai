@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PrepAI. Interview Coach</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap">
+<style>
+:root{--bg:#fbf3e4;--ink:#0b3b4a;--card:#ffffff;--soft:#f3e4c6;--muted:#4f7480;--line:#0b3b4a22;--orange:#ff6f2c;--mint:#8fe0c8;--yellow:#ffd05a;--pink:#f7a98f;--serif:'Fraunces',Georgia,serif;
+padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#082c38;--ink:#f7e6c8;--card:#0f4655;--soft:#14586a;--muted:#9bc0c7;--line:#f7e6c826}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 'DM Sans',system-ui,sans-serif;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+:focus-visible{outline:3px solid var(--orange);outline-offset:3px}
+.blob{position:fixed;border-radius:50%;filter:blur(70px);opacity:.45;z-index:0;pointer-events:none}
+.b1{width:420px;height:420px;background:var(--orange);top:-140px;right:-100px;animation:drift 14s ease-in-out infinite alternate}
+.b2{width:360px;height:360px;background:var(--mint);bottom:-120px;left:-80px;animation:drift 18s ease-in-out infinite alternate-reverse}
+.wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:24px clamp(16px,4vw,48px) 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.logo{font:900 30px/1 var(--serif)}.logo i{color:var(--orange);font-style:normal;display:inline-block;animation:hop 2s ease-in-out infinite}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);padding:5px;border-radius:40px}
+.tabs a{padding:9px 18px;border-radius:30px;text-decoration:none;color:var(--muted);font-weight:500;transition:background .25s,color .25s}
+.tabs a:hover{background:var(--soft)}
+.tabs a[aria-current]{background:var(--ink);color:var(--bg)}
+.streak{background:var(--yellow);color:#0b3b4a;font-weight:700;padding:8px 16px;border-radius:30px}
+.streak b{display:inline-block;animation:flame 1.2s ease-in-out infinite}
+.grid{display:grid;grid-template-columns:1.05fr 1fr;gap:20px;margin-top:28px}
+.hero{background:var(--ink);color:var(--bg);border-radius:34px;padding:36px;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:560px}
+.eyebrow{letter-spacing:.14em;font-size:13px;font-weight:700;color:var(--mint)}
+h1{font:900 clamp(36px,4.6vw,60px)/1.03 var(--serif);margin:12px 0 0;max-width:9em}
+h1 span{display:inline-block}
+.mascot{position:absolute;right:24px;top:24px;width:104px;animation:float 4s ease-in-out infinite}
+.eye{transform-box:fill-box;transform-origin:center;animation:blink 4s infinite}
+.hp{transform-box:fill-box;transform-origin:50% 100%;animation:nod 2.4s ease-in-out infinite}
+.mic{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:14px}
+.wave{display:flex;align-items:center;gap:6px;height:70px}
+.wave i{width:7px;height:14px;border-radius:6px;background:var(--orange);animation:bars 1.4s ease-in-out infinite;animation-delay:calc(var(--i)*-.09s)}
+.on .wave i{animation:talk .5s ease-in-out infinite alternate;animation-delay:calc(var(--i)*-.07s);background:var(--mint)}
+.micwrap{position:relative;width:104px;height:104px;display:grid;place-items:center}
+.micwrap::before,.micwrap::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--orange);opacity:0;animation:ripple 2.8s ease-out infinite}
+.micwrap::after{animation-delay:1.4s}
+.on .micwrap::before,.on .micwrap::after{animation-duration:1.2s;border-color:var(--mint)}
+.on .micwrap::after{animation-delay:.6s}
+.micbtn{position:relative;width:88px;height:88px;border-radius:50%;background:var(--orange);color:#0b3b4a;display:grid;place-items:center;animation:breathe 2.6s ease-in-out infinite;transition:background .3s}
+.on .micbtn{background:var(--mint)}
+.micbtn:active{transform:scale(.92)}
+.micbtn svg{width:34px;height:34px}
+.cap{font-weight:500;min-height:24px;opacity:.9}
+.inp{width:100%;display:flex;align-items:center;background:#ffffff14;border:1.5px solid #ffffff33;border-radius:40px;padding:6px 6px 6px 22px;transition:border-color .3s,box-shadow .3s}
+.inp:focus-within{border-color:var(--orange);box-shadow:0 0 0 5px #ff6f2c33}
+.inp input{flex:1;min-width:0;background:none;border:0;outline:0;color:inherit;font:inherit}
+.inp input::placeholder{color:#a9c6cc}
+.send{width:44px;height:44px;border-radius:50%;background:var(--bg);color:var(--ink);display:grid;place-items:center;transition:transform .3s}
+.send:hover{transform:translateY(-3px) scale(1.08)}
+.send svg,.go svg{width:18px;height:18px}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:22px;text-align:left;display:flex;flex-direction:column;gap:14px;min-height:220px;transition:transform .35s cubic-bezier(.2,.9,.3,1.4),box-shadow .3s}
+.card:hover{transform:translateY(-8px) rotate(-1deg);box-shadow:0 20px 36px #0b3b4a2e}
+.card:nth-child(even):hover{transform:translateY(-8px) rotate(1deg)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.q{font:900 40px/1 var(--serif)}
+.tag{font-size:12.5px;font-weight:700;padding:5px 12px;border-radius:20px;color:#0b3b4a;white-space:nowrap}
+.card h3{margin:0;font:700 20px/1.25 var(--serif);flex:1}
+.go{display:flex;justify-content:space-between;align-items:center;font-weight:700}
+.go em{width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;transition:transform .3s}
+.card:hover .go em{transform:translateX(6px)}
+.rand{background:var(--orange);color:#0b3b4a;border-color:transparent}
+.dice{width:44px;height:44px;border:3px solid #0b3b4a;border-radius:12px;display:grid;place-items:center;transition:transform .6s}
+.dice svg{width:24px;height:24px}
+.rand:hover .dice{transform:rotate(360deg)}
+.rand.roll .dice{animation:roll .8s ease}
+.rand p{margin:4px 0 0;font-size:14.5px}
+.rand .go em{background:#0b3b4a;color:#f7e6c8}
+.marq{margin-top:20px;overflow:hidden;border-radius:30px;background:var(--card);border:1px solid var(--line);padding:14px 0;-webkit-mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.track{display:flex;gap:12px;width:max-content;animation:scroll 32s linear infinite}
+.marq:hover .track{animation-play-state:paused}
+.track button{white-space:nowrap;background:var(--soft);padding:9px 18px;border-radius:24px;font-weight:500;transition:background .25s,transform .25s}
+.track button:hover{background:var(--yellow);color:#0b3b4a;transform:translateY(-3px)}
+.toast{position:fixed;left:50%;bottom:24px;z-index:5;transform:translate(-50%,140px);background:var(--ink);color:var(--bg);padding:13px 22px;border-radius:30px;font-weight:700;max-width:90vw;text-align:center;transition:transform .5s cubic-bezier(.2,.9,.3,1.3)}
+.toast.show{transform:translate(-50%,0)}
+.in{opacity:0;transform:translateY(30px);animation:rise .7s cubic-bezier(.2,.9,.3,1.1) forwards;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:none}}
+@keyframes drift{to{transform:translate(-80px,60px) scale(1.2)}}
+@keyframes float{50%{transform:translateY(-12px) rotate(3deg)}}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes nod{50%{transform:translateY(-3px)}}
+@keyframes hop{50%{transform:translateY(-6px)}}
+@keyframes flame{50%{transform:scale(1.25) rotate(8deg)}}
+@keyframes bars{0%,100%{height:12px;opacity:.5}50%{height:calc(18px + var(--i)*5px);opacity:1}}
+@keyframes talk{from{height:10px}to{height:64px}}
+@keyframes ripple{from{transform:scale(.85);opacity:.8}to{transform:scale(1.6);opacity:0}}
+@keyframes breathe{50%{transform:scale(1.06)}}
+@keyframes roll{40%{transform:rotate(540deg) scale(1.4)}to{transform:rotate(720deg)}}
+@keyframes scroll{to{transform:translateX(-50%)}}
+@media(max-width:940px){.grid{grid-template-columns:1fr}.hero{min-height:500px}}
+@media(max-width:520px){.side{grid-template-columns:1fr}.card{min-height:0}.mascot{width:76px}.tabs a{padding:8px 12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="blob b1"></div><div class="blob b2"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="arr" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol></defs></svg>
+<div class="wrap">
+<header class="in">
+<div class="logo">PrepAI<i>.</i></div>
+<nav class="tabs" aria-label="Main"><a href="#" aria-current="page">Practise</a><a href="#">History</a><a href="#">Saved</a></nav>
+<div class="streak"><b>🔥</b> 3-day streak</div>
+</header>
+<div class="grid">
+<section class="hero in" style="--d:.15s" id="hero">
+<svg class="mascot" viewBox="0 0 140 150" aria-hidden="true"><path d="M20 12h100a18 18 0 0 1 18 18v62a18 18 0 0 1-18 18H70l-22 32V110H20A18 18 0 0 1 2 92V30A18 18 0 0 1 20 12z" fill="#ff6f2c"/><g class="eye"><circle cx="48" cy="56" r="7" fill="#0b3b4a"/></g><g class="eye"><circle cx="92" cy="56" r="7" fill="#0b3b4a"/></g><path d="M50 76q20 18 40 0" stroke="#0b3b4a" stroke-width="7" fill="none" stroke-linecap="round"/><g class="hp"><path d="M20 62C16 -2 124 -2 120 62" stroke="#f7e6c8" stroke-width="9" fill="none" stroke-linecap="round"/><rect x="9" y="48" width="14" height="30" rx="7" fill="#f7e6c8"/><rect x="117" y="48" width="14" height="30" rx="7" fill="#f7e6c8"/></g></svg>
+<div class="eyebrow">YOUR INTERVIEW COACH</div>
+<h1 id="h"></h1>
+<div class="mic">
+<div class="wave" aria-hidden="true"><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:5"></i><i style="--i:4"></i><i style="--i:3"></i><i style="--i:2"></i><i style="--i:1"></i></div>
+<div class="micwrap"><button class="micbtn" id="mb" aria-pressed="false" aria-label="Tap and ask out loud"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+<div class="cap" id="cap">Tap and ask out loud</div>
+<div class="inp"><input id="t" placeholder="Or type your question…" aria-label="Type your question"><button class="send" id="s" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+</div>
+</section>
+<section class="side" aria-label="Pick a card">
+<button class="card in" style="--d:.3s" data-q="Tell me about yourself."><div class="top"><span class="q">Q1</span><span class="tag" style="background:var(--mint)">Intro</span></div><h3>Tell me about yourself.</h3><div class="go">Practise this<em><svg><use href="#arr"/></svg></em></div></button>
+<button class="card in" style="--d:.42s" data-q="What are your biggest strengths and weaknesses?"><div class="top"><span class="q">Q2</span><span class="tag" style="background:var(--yellow)">Self-awareness</span></div><h3>What are your biggest strengths and weaknesses?</h3><div class="go">Practise this<em><svg><use href="#arr"/></svg></em></div></button>
+<button class="card in" style="--d:.54s" data-q="What should I ask the interviewer?"><div class="top"><span class="q">Q3</span><span class="tag" style="background:var(--pink)">Your turn</span></div><h3>What should I ask the interviewer?</h3><div class="go">Practise this<em><svg><use href="#arr"/></svg></em></div></button>
+<button class="card rand in" style="--d:.66s" id="rand"><div class="top"><span class="dice"><svg viewBox="0 0 24 24" fill="#0b3b4a"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg></span><span class="tag" style="background:#f7e6c8">Random</span></div><div style="flex:1"><h3 id="rq" style="font-size:24px">Surprise me</h3><p>A random question, just for you.</p></div><div class="go">Roll the dice<em><svg><use href="#arr"/></svg></em></div></button>
+</section>
+</div>
+<div class="marq in" style="--d:.8s" aria-label="More questions"><div class="track" id="track"></div></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+var h=document.getElementById('h');
+'What shall we practise today?'.split(' ').forEach(function(w,i){var s=document.createElement('span');s.textContent=w+'\u00a0';s.className='in';s.style.setProperty('--d',(.25+i*.12)+'s');h.appendChild(s)});
+var toast=document.getElementById('toast'),tt;
+function show(m){toast.textContent=m;toast.classList.add('show');clearTimeout(tt);tt=setTimeout(function(){toast.classList.remove('show')},2300)}
+document.querySelectorAll('.card[data-q]').forEach(function(c){c.onclick=function(){show('Starting: \u201c'+c.dataset.q+'\u201d')}});
+var qs=['Why do you want this role?','Describe a tough bug you fixed.','Where do you see yourself in five years?','Tell me about a team conflict.','What is your proudest project?','How do you handle deadlines?'],n=0;
+var r=document.getElementById('rand'),rq=document.getElementById('rq');
+r.onclick=function(){r.classList.remove('roll');void r.offsetWidth;r.classList.add('roll');var k=0,iv=setInterval(function(){rq.textContent=qs[(n+k++)%qs.length];rq.style.fontSize='20px';if(k>6){clearInterval(iv);n=(n+k)%qs.length}},110)};
+var tr=document.getElementById('track');
+qs.concat(qs).forEach(function(q){var b=document.createElement('button');b.textContent=q;b.onclick=function(){show('Starting: \u201c'+q+'\u201d')};tr.appendChild(b)});
+var hero=document.getElementById('hero'),mb=document.getElementById('mb'),cap=document.getElementById('cap');
+mb.onclick=function(){var on=hero.classList.toggle('on');mb.setAttribute('aria-pressed',on);cap.textContent=on?'Listening\u2026 tap to stop':'Tap and ask out loud'};
+var inp=document.getElementById('t'),sb=document.getElementById('s'),ph=['Or type your question\u2026','Try: Why should we hire you?','Try: Explain a project you led\u2026'],pi=0;
+setInterval(function(){pi=(pi+1)%ph.length;inp.placeholder=ph[pi]},3200);
+sb.onclick=function(){if(inp.value.trim()){show('Sent: \u201c'+inp.value.trim()+'\u201d');inp.value=''}};
+inp.onkeydown=function(e){if(e.key==='Enter')sb.click()};
+</script>
+</body>
+</html>

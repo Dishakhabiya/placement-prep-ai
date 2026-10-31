@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 export default function SkillChip({
   label,
@@ -72,51 +72,54 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
   },
+  badge: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginRight: 6,
+  },
   chipText: {
     fontSize: 13,
     fontWeight: '600',
   },
-  badge: {
-    fontSize: 12,
-    fontWeight: '800',
-    marginRight: 5,
-  },
   removeBtn: {
     marginLeft: 6,
     paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   removeText: {
-    color: '#94A3B8',
-    fontSize: 16,
-    fontWeight: 'bold',
-    lineHeight: 16,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#6B7280',
+    marginTop: -2,
   },
-  neutralContainer: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
-  },
-  neutralText: {
-    color: '#E2E8F0',
-  },
+  // Variant styles
   matchedContainer: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderColor: '#10B981',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
   matchedText: {
-    color: '#34D399',
+    color: '#065F46',
   },
   missingContainer: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderColor: '#EF4444',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
   },
   missingText: {
-    color: '#F87171',
+    color: '#854D0E',
   },
   extraContainer: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    borderColor: '#6366F1',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
   },
   extraText: {
-    color: '#818CF8',
+    color: '#1E40AF',
+  },
+  neutralContainer: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  neutralText: {
+    color: '#1F2937',
   },
 });

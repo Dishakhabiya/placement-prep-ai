@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PrepAI – Your interview coach</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#0b3d4a; --bg2:#10505f; --cream:#f7e8c8; --ink:#0b2f3a; --orange:#ff7a3d;
+  --mint:#9fe0c9; --sun:#ffd36b; --muted:#9cc3cc; --line:#1d6071;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--cream);font-family:'DM Sans',system-ui,sans-serif;display:flex;flex-direction:column;position:relative;overflow-x:hidden}
+.serif{font-family:'Fraunces',Georgia,serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:28px 56px}
+.logo{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:32px;user-select:none}
+.logo span{color:var(--orange)}
+.hist{width:48px;height:48px;border-radius:50%;border:2px solid var(--line);background:none;color:var(--cream);display:grid;place-items:center;cursor:pointer;transition:background .2s, transform .2s}
+.hist:hover{background:var(--bg2);transform:scale(1.05)}
+main{flex:1;width:100%;max-width:1200px;margin:0 auto;padding:0 56px 40px}
+.hero{display:flex;justify-content:space-between;align-items:center;gap:24px}
+.hero p{margin:0 0 8px;color:var(--muted);font-weight:700;letter-spacing:.14em;font-size:14px}
+h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(40px,5.4vw,72px);line-height:1.02;margin:0}
+.mascot{width:150px;flex:none;animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-12px) rotate(-3deg)}}
+.row{display:flex;justify-content:space-between;margin:44px 0 16px;color:var(--muted);font-weight:700;letter-spacing:.14em;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.card{background:var(--cream);color:var(--ink);border-radius:28px;padding:24px;min-height:300px;display:flex;flex-direction:column;cursor:pointer;border:0;text-align:left;font:inherit;transition:transform .25s ease,box-shadow .25s ease;animation:rise .7s both}
+.card:nth-child(2){animation-delay:.1s}.card:nth-child(3){animation-delay:.2s}.card:nth-child(4){animation-delay:.3s}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}}
+.card:hover,.card:focus-visible{transform:translateY(-8px);box-shadow:0 20px 40px rgba(0,0,0,.3);outline:none}
+.top{display:flex;justify-content:space-between;align-items:flex-start}
+.q{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:54px;line-height:1}
+.tag{font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;color:var(--ink)}
+.card h3{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:24px;line-height:1.2;margin:auto 0 28px}
+.foot{display:flex;justify-content:space-between;align-items:center;font-weight:700}
+.go{width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--cream);display:grid;place-items:center;transition:transform .25s}
+.card:hover .go{transform:translateX(6px)}
+.dice{background:var(--orange);color:var(--ink)}
+.dice .go{background:var(--ink)}
+.dice .rolling{display:inline-block}
+.dice.roll .die{animation:spin .6s ease}
+@keyframes spin{to{transform:rotate(360deg)}}
+.die{font-size:54px;line-height:1;display:inline-block}
+.dice p{margin:0 0 28px;font-weight:500}
+.dice h3{margin-bottom:8px}
+.voice{display:flex;flex-direction:column;align-items:center;margin-top:56px}
+.mic-wrap{display:flex;align-items:center;gap:20px}
+.dots{display:flex;gap:16px}
+.dots i{width:12px;height:12px;border-radius:50%;background:var(--orange);opacity:.5;animation:pulse 1.6s ease-in-out infinite}
+.dots.l i:nth-child(1),.dots.r i:nth-child(6){animation-delay:.5s}
+.dots.l i:nth-child(2),.dots.r i:nth-child(5){animation-delay:.4s}
+.dots.l i:nth-child(3),.dots.r i:nth-child(4){animation-delay:.3s}
+.dots.l i:nth-child(4),.dots.r i:nth-child(3){animation-delay:.2s}
+.dots.l i:nth-child(5),.dots.r i:nth-child(2){animation-delay:.1s}
+@keyframes pulse{50%{opacity:1;transform:scale(1.5)}}
+.mic{position:relative;width:104px;height:104px;border-radius:50%;border:0;background:var(--orange);color:var(--ink);display:grid;place-items:center;cursor:pointer;transition:transform .2s, background .2s}
+.mic:hover{transform:scale(1.05)}
+.mic::before,.mic::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--orange);animation:ring 2.4s ease-out infinite}
+.mic::after{animation-delay:1.2s}
+@keyframes ring{from{transform:scale(1);opacity:.7}to{transform:scale(1.9);opacity:0}}
+.mic.on{background:var(--sun)}
+.hint{margin-top:16px;color:var(--muted);font-size:18px}
+.type{margin-top:28px;width:100%;max-width:640px;display:flex;align-items:center;background:var(--bg2);border:2px solid var(--line);border-radius:999px;padding:8px 8px 8px 28px;transition:box-shadow .2s, border-color .2s}
+.type:focus-within{border-color:var(--orange);box-shadow:0 0 0 4px rgba(255,122,61,.2)}
+.type input{flex:1;background:none;border:0;color:var(--cream);font:inherit;font-size:18px;outline:none}
+.type input::placeholder{color:var(--muted)}
+.type button{width:48px;height:48px;border-radius:50%;border:0;background:var(--cream);color:var(--ink);cursor:pointer;display:grid;place-items:center;transition:transform .2s}
+.type button:hover{transform:translateY(-2px)}
+.toast{position:fixed;left:50%;bottom:32px;transform:translate(-50%,24px);background:var(--cream);color:var(--ink);padding:16px 26px;border-radius:18px;font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:20px;max-width:min(90vw,640px);opacity:0;pointer-events:none;transition:.35s;z-index:2000;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+:root:not([data-theme="light"]) .hist{color:var(--cream)}
+
+/* Slide-up Practice Panel */
+.panel-backdrop{position:fixed;inset:0;background:rgba(11,47,58,.75);backdrop-filter:blur(6px);z-index:1500;display:none;align-items:flex-end;justify-content:center}
+.panel-backdrop.active{display:flex}
+.panel{background:var(--cream);color:var(--ink);width:100%;max-width:860px;max-height:90vh;border-top-left-radius:36px;border-top-right-radius:36px;padding:36px 44px 44px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;box-shadow:0 -20px 50px rgba(0,0,0,.4);animation:slideUp .4s cubic-bezier(.16,1,.3,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.panel-tag{display:inline-block;padding:6px 14px;border-radius:999px;background:var(--ink);color:var(--cream);font-weight:700;font-size:13px;margin-bottom:8px}
+.panel-q{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(22px,3vw,30px);line-height:1.2;margin:0}
+.btn-close{width:42px;height:42px;border-radius:50%;border:0;background:var(--bg2);color:var(--cream);font-size:20px;font-weight:700;cursor:pointer;display:grid;place-items:center;flex:none;transition:transform .2s}
+.btn-close:hover{transform:scale(1.08)}
+.panel-body{display:flex;flex-direction:column;gap:18px}
+.ans-area{width:100%;min-height:140px;background:#fff;border:2px solid #ecd8b3;border-radius:20px;padding:18px;font:inherit;font-size:17px;color:var(--ink);resize:vertical;outline:none;transition:border-color .2s}
+.ans-area:focus{border-color:var(--orange)}
+.panel-actions{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.panel-mic-hint{font-size:14px;color:#6b5a45;display:flex;align-items:center;gap:8px}
+.btn-submit{background:var(--orange);color:var(--ink);font:inherit;font-weight:800;font-size:17px;padding:14px 28px;border-radius:999px;border:0;cursor:pointer;transition:transform .2s,box-shadow .2s;display:flex;align-items:center;gap:10px}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(255,122,61,.4)}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+/* Feedback Results in Panel */
+.feedback-box{background:var(--bg);color:var(--cream);border-radius:24px;padding:26px;display:flex;flex-direction:column;gap:16px;margin-top:10px;animation:rise .4s ease}
+.score-badge{display:flex;align-items:baseline;gap:8px;font-family:'Fraunces',Georgia,serif}
+.score-num{font-size:48px;font-weight:800;color:var(--sun);line-height:1}
+.score-max{font-size:20px;color:var(--muted)}
+.fb-section h4{margin:0 0 6px;font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fb-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.fb-list li{font-size:15px;line-height:1.45;position:relative;padding-left:22px}
+.fb-list.strengths li::before{content:"✓";position:absolute;left:0;color:var(--mint);font-weight:800}
+.fb-list.improvements li::before{content:"⚡";position:absolute;left:0;color:var(--orange)}
+.sample-ans{background:var(--bg2);border-radius:16px;padding:16px 20px;font-size:15px;line-height:1.5;font-style:italic;border-left:4px solid var(--sun)}
+
+/* Slide-in History Drawer */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(11,47,58,.7);backdrop-filter:blur(4px);z-index:1600;display:none;justify-content:flex-end}
+.drawer-backdrop.active{display:flex}
+.drawer{background:var(--bg);color:var(--cream);width:100%;max-width:440px;height:100vh;padding:32px 28px;display:flex;flex-direction:column;gap:20px;box-shadow:-10px 0 30px rgba(0,0,0,.4);animation:slideLeft .35s ease}
+@keyframes slideLeft{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:16px}
+.drawer-head h2{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:26px;margin:0}
+.drawer-list{overflow-y:auto;display:flex;flex-direction:column;gap:14px;flex:1}
+.hist-item{background:var(--bg2);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line)}
+.hist-item-top{display:flex;justify-content:space-between;align-items:flex-start}
+.hist-item-q{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:15px;color:var(--cream);flex:1}
+.hist-score{background:var(--sun);color:var(--ink);padding:3px 8px;border-radius:8px;font-weight:800;font-size:12px;margin-left:8px}
+.hist-time{font-size:12px;color:var(--muted)}
+.hist-ans{font-size:13px;color:var(--muted);background:rgba(0,0,0,.2);padding:8px 12px;border-radius:10px;line-height:1.35}
+
+@media (max-width:980px){
+  .cards{grid-template-columns:repeat(2,1fr)}
+  header,main{padding-left:24px;padding-right:24px}
+  .mascot{width:100px}
+  .panel{padding:26px 20px 30px}
+}
+@media (max-width:560px){
+  .cards{grid-template-columns:1fr}
+  .dots{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PrepAI<span>.</span></div>
+  <button class="hist" id="btn-hist" aria-label="Open Practice History" title="History">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <p>YOUR INTERVIEW COACH</p>
+      <h1>What shall we<br>practise today?</h1>
+    </div>
+    <svg class="mascot" viewBox="0 0 160 170" aria-hidden="true">
+      <path d="M30 40a50 46 0 0 1 100 0c0 28-18 46-44 50l-36 44 6-46C40 82 30 64 30 40z" fill="#ff7a3d"/>
+      <path d="M22 62v-14a58 52 0 0 1 116 0v14" fill="none" stroke="#f7e8c8" stroke-width="9" stroke-linecap="round"/>
+      <rect x="14" y="46" width="14" height="30" rx="7" fill="#f7e8c8"/><rect x="132" y="46" width="14" height="30" rx="7" fill="#f7e8c8"/>
+      <ellipse cx="62" cy="52" rx="6" ry="9" fill="#0b2f3a"/><ellipse cx="98" cy="52" rx="6" ry="9" fill="#0b2f3a"/>
+      <path d="M64 70q16 14 32 0" fill="none" stroke="#0b2f3a" stroke-width="5" stroke-linecap="round"/>
+      <path d="M138 70q0 22-34 24" fill="none" stroke="#f7e8c8" stroke-width="5" stroke-linecap="round"/><circle cx="102" cy="94" r="7" fill="#f7e8c8"/>
+    </svg>
+  </section>
+
+  <div class="row"><span>PICK A CARD</span><span>HOVER TO PREVIEW</span></div>
+
+  <!-- Cards dynamically rendered from /api/questions -->
+  <section class="cards" id="cards">
+    <div style="color:var(--muted)">Loading questions…</div>
+  </section>
+
+  <section class="voice">
+    <div class="mic-wrap">
+      <div class="dots l"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <button class="mic" id="mic" aria-label="Ask out loud" title="Tap to speak">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/>
+        </svg>
+      </button>
+      <div class="dots r"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="hint" id="hint">Tap and ask out loud</div>
+    <form class="type" id="form" onsubmit="return false">
+      <input id="inp" type="text" placeholder="Or type your question…" aria-label="Type your question">
+      <button id="send" type="button" aria-label="Send">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7"/>
+        </svg>
+      </button>
+    </form>
+  </section>
+</main>
+
+<!-- Slide-Up Practice Panel -->
+<div class="panel-backdrop" id="panel-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="panel" id="panel">
+    <div class="panel-head">
+      <div>
+        <span class="panel-tag" id="panel-tag">Intro</span>
+        <h2 class="panel-q" id="panel-q">Tell me about yourself.</h2>
+      </div>
+      <button class="btn-close" id="btn-close-panel" aria-label="Close practice panel">✕</button>
+    </div>
+
+    <div class="panel-body">
+      <label for="panel-ans" class="sr-only" style="display:none">Your Answer</label>
+      <textarea class="ans-area" id="panel-ans" placeholder="Speak or type your answer here… Explain your approach, key accomplishments, or examples."></textarea>
+      
+      <div class="panel-actions">
+        <div class="panel-mic-hint" id="panel-mic-hint">
+          <span>🎙️</span> Use the main microphone button or type above
+        </div>
+        <button class="btn-submit" id="btn-submit-ans">
+          <span>✨</span> Get Feedback
+        </button>
+      </div>
+
+      <!-- Feedback container rendered after submit -->
+      <div id="panel-feedback" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide-In History Drawer -->
+<div class="drawer-backdrop" id="drawer-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="drawer" id="drawer">
+    <div class="drawer-head">
+      <h2>📜 History</h2>
+      <button class="btn-close" id="btn-close-drawer" aria-label="Close history drawer">✕</button>
+    </div>
+    <div class="drawer-list" id="drawer-list">
+      <div style="color:var(--muted);text-align:center;padding:30px 0">Loading history…</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// State & elements
+var cardsContainer = document.getElementById('cards');
+var toast = document.getElementById('toast'), toastTimer;
+var panelBackdrop = document.getElementById('panel-backdrop');
+var panelQ = document.getElementById('panel-q');
+var panelTag = document.getElementById('panel-tag');
+var panelAns = document.getElementById('panel-ans');
+var btnSubmit = document.getElementById('btn-submit-ans');
+var panelFeedback = document.getElementById('panel-feedback');
+var btnClosePanel = document.getElementById('btn-close-panel');
+var btnHist = document.getElementById('btn-hist');
+var drawerBackdrop = document.getElementById('drawer-backdrop');
+var drawerList = document.getElementById('drawer-list');
+var btnCloseDrawer = document.getElementById('btn-close-drawer');
+var mic = document.getElementById('mic'), hint = document.getElementById('hint');
+var inp = document.getElementById('inp'), sendBtn = document.getElementById('send');
+
+var currentActiveQuestion = "";
+var recognition = null;
+var isListening = false;
+
+function say(m) {
+  toast.textContent = m;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() {
+    toast.classList.remove('show');
+  }, 3200);
+}
+
+// 1. Fetch questions and build cards dynamically from /api/questions
+async function loadCards() {
+  try {
+    var res = await fetch('/api/questions');
+    if (!res.ok) throw new Error('Failed to load questions');
+    var questions = await res.json();
+    renderCards(questions);
+  } catch (err) {
+    cardsContainer.innerHTML = '<div style="color:var(--orange)">Failed to load questions. Check server connection.</div>';
+  }
+}
+
+function renderCards(questions) {
+  var html = '';
+  questions.forEach(function(q) {
+    html += `
+      <button class="card" data-q="${q.text.replace(/"/g, '&quot;')}" data-tag="${q.tag || 'Intro'}">
+        <div class="top"><span class="q">${q.label || 'Q'}</span><span class="tag" style="background:${q.tagColor || 'var(--mint)'}">${q.tag || 'Intro'}</span></div>
+        <h3>${q.text}</h3>
+        <div class="foot">Practise this <span class="go"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+      </button>
+    `;
+  });
+
+  // Append Surprise me dice card
+  html += `
+    <button class="card dice" id="dice">
+      <div class="top"><span class="die">🎲</span></div>
+      <h3>Surprise me</h3>
+      <p>A random question, just for you.</p>
+      <div class="foot">Roll the dice <span class="go" style="color:var(--cream)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+    </button>
+  `;
+
+  cardsContainer.innerHTML = html;
+
+  // Add click handlers for question cards
+  document.querySelectorAll('.card[data-q]').forEach(function(c) {
+    c.onclick = function() {
+      openPracticePanel(c.dataset.q, c.dataset.tag);
+    };
+  });
+
+  // Add click handler for dice card
+  var diceBtn = document.getElementById('dice');
+  if (diceBtn) {
+    diceBtn.onclick = handleDiceRoll;
+  }
+}
+
+// 2. Dice card calls /api/random-question and opens practice panel
+async function handleDiceRoll() {
+  var diceBtn = document.getElementById('dice');
+  if (diceBtn) {
+    diceBtn.classList.remove('roll');
+    void diceBtn.offsetWidth;
+    diceBtn.classList.add('roll');
+  }
+
+  try {
+    var res = await fetch('/api/random-question');
+    if (!res.ok) throw new Error('Random question failed');
+    var randomQ = await res.json();
+    say('Random: ' + randomQ.text);
+    setTimeout(function() {
+      openPracticePanel(randomQ.text, randomQ.tag || 'Random');
+    }, 450);
+  } catch (err) {
+    openPracticePanel('Tell me about a challenging situation you handled.', 'Random');
+  }
+}
+
+// 3. Slide-up Practice Panel
+function openPracticePanel(questionText, tagText) {
+  currentActiveQuestion = questionText;
+  panelQ.textContent = questionText;
+  panelTag.textContent = tagText || 'Interview';
+  panelAns.value = '';
+  panelFeedback.style.display = 'none';
+  panelFeedback.innerHTML = '';
+  btnSubmit.disabled = false;
+  btnSubmit.innerHTML = '<span>✨</span> Get Feedback';
+
+  panelBackdrop.classList.add('active');
+  panelBackdrop.setAttribute('aria-hidden', 'false');
+  panelAns.focus();
+}
+
+function closePracticePanel() {
+  panelBackdrop.classList.remove('active');
+  panelBackdrop.setAttribute('aria-hidden', 'true');
+  if (isListening) stopListening();
+}
+
+btnClosePanel.onclick = closePracticePanel;
+panelBackdrop.onclick = function(e) {
+  if (e.target === panelBackdrop) closePracticePanel();
+};
+
+// 4. Submit Answer to /api/coach
+btnSubmit.onclick = async function() {
+  var answer = panelAns.value.trim();
+  if (!answer) {
+    say('Please write or speak an answer first.');
+    panelAns.focus();
+    return;
+  }
+
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<span>⏳</span> Evaluating answer…';
+  panelFeedback.style.display = 'none';
+
+  try {
+    var res = await fetch('/api/coach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: currentActiveQuestion,
+        answer: answer
+      })
+    });
+
+    var data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Couldn't reach the coach. Check your API key and try again.");
+    }
+
+    renderFeedback(data);
+    btnSubmit.innerHTML = '<span>🔄</span> Re-evaluate';
+    btnSubmit.disabled = false;
+  } catch (err) {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<span>✨</span> Get Feedback';
+    say(err.message || "Couldn't reach the coach. Check your API key and try again.");
+  }
+};
+
+function renderFeedback(data) {
+  var strengthsHtml = (data.strengths || []).map(function(s) {
+    return '<li>' + s + '</li>';
+  }).join('');
+
+  var improvementsHtml = (data.improvements || []).map(function(i) {
+    return '<li>' + i + '</li>';
+  }).join('');
+
+  panelFeedback.innerHTML = `
+    <div class="feedback-box">
+      <div class="score-badge">
+        <span class="score-num">${data.score || 8}</span>
+        <span class="score-max">/ 10</span>
+      </div>
+
+      <div class="fb-section">
+        <h4>Strengths</h4>
+        <ul class="fb-list strengths">${strengthsHtml}</ul>
+      </div>
+
+      <div class="fb-section">
+        <h4>Key Improvements</h4>
+        <ul class="fb-list improvements">${improvementsHtml}</ul>
+      </div>
+
+      ${data.sampleAnswer ? `
+        <div class="fb-section">
+          <h4>Coach Model Answer</h4>
+          <div class="sample-ans">${data.sampleAnswer}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  panelFeedback.style.display = 'block';
+}
+
+// 5. Web Speech API (SpeechRecognition)
+var SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognitionAPI) {
+  recognition = new SpeechRecognitionAPI();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = function(event) {
+    var transcript = '';
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+
+    // If practice panel is open, transcribe into panel textarea
+    if (panelBackdrop.classList.contains('active')) {
+      panelAns.value = (panelAns.value ? panelAns.value + ' ' : '') + transcript;
+    } else {
+      // Otherwise transcribe into question input
+      inp.value = transcript;
+    }
+  };
+
+  recognition.onerror = function(event) {
+    say("Voice error: " + (event.error || 'speech failed'));
+    stopListening();
+  };
+
+  recognition.onend = function() {
+    if (isListening) stopListening();
+  };
+}
+
+function startListening() {
+  if (!SpeechRecognitionAPI) {
+    say("Voice isn't supported in this browser. Please type instead.");
+    return;
+  }
+  try {
+    recognition.start();
+    isListening = true;
+    mic.classList.add('on');
+    hint.textContent = 'Listening… tap to stop';
+  } catch (err) {
+    console.warn('Speech start error:', err);
+  }
+}
+
+function stopListening() {
+  if (recognition) {
+    try { recognition.stop(); } catch(e){}
+  }
+  isListening = false;
+  mic.classList.remove('on');
+  hint.textContent = 'Tap and ask out loud';
+}
+
+mic.onclick = function() {
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+};
+
+// 6. Custom Question typed in form
+function handleCustomQuestion() {
+  var customQ = inp.value.trim();
+  if (!customQ) return;
+  inp.value = '';
+  openPracticePanel(customQ, 'Custom');
+}
+
+sendBtn.onclick = handleCustomQuestion;
+inp.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    handleCustomQuestion();
+  }
+});
+
+// 7. History Drawer (/api/history)
+async function openHistoryDrawer() {
+  drawerBackdrop.classList.add('active');
+  drawerBackdrop.setAttribute('aria-hidden', 'false');
+  drawerList.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px 0">Loading past attempts…</div>';
+
+  try {
+    var res = await fetch('/api/history');
+    if (!res.ok) throw new Error('Failed to load history');
+    var items = await res.json();
+
+    if (!items || !items.length) {
+      drawerList.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px 0">No practice attempts yet. Try a question! 🚀</div>';
+      return;
+    }
+
+    var html = items.map(function(item) {
+      var d = new Date(item.timestamp).toLocaleDateString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+      return `
+        <div class="hist-item">
+          <div class="hist-item-top">
+            <span class="hist-item-q">${item.question}</span>
+            <span class="hist-score">${item.score}/10</span>
+          </div>
+          <div class="hist-time">${d}</div>
+          <div class="hist-ans">“${item.answer}”</div>
+        </div>
+      `;
+    }).join('');
+
+    drawerList.innerHTML = html;
+  } catch (err) {
+    drawerList.innerHTML = '<div style="color:var(--orange);padding:20px 0">Unable to load history.</div>';
+  }
+}
+
+function closeHistoryDrawer() {
+  drawerBackdrop.classList.remove('active');
+  drawerBackdrop.setAttribute('aria-hidden', 'true');
+}
+
+btnHist.onclick = openHistoryDrawer;
+btnCloseDrawer.onclick = closeHistoryDrawer;
+drawerBackdrop.onclick = function(e) {
+  if (e.target === drawerBackdrop) closeHistoryDrawer();
+};
+
+// Keyboard ESC handling
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closePracticePanel();
+    closeHistoryDrawer();
+  }
+});
+
+// Initial boot
+loadCards();
+</script>
+</body>
+</html>

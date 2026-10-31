@@ -1,11 +1,14 @@
 import os
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 import spacy
 from module1.ner.labels import ENTITY_TYPES
-from module1.matching.normalize import _TAXONOMY, _ALIASES, normalize_skill, normalize_skill_list
+from module1.matching.normalize import _TAXONOMY, _ALIASES, _LOWER_TO_CANONICAL, normalize_skill, normalize_skill_list
 
-# Optional Transformer model path
+# Transformer model path or HuggingFace Hub model ID.
+# Set NER_MODEL_PATH to either:
+#   - A local directory (e.g. "models/distilbert-resume-ner") after running train.py
+#   - A HuggingFace Hub ID (e.g. "dslim/bert-base-NER") for a pre-trained model
 NER_MODEL_PATH = os.getenv("NER_MODEL_PATH", "models/distilbert-resume-ner")
 
 # Load spaCy pipeline for linguistic baseline
@@ -17,8 +20,15 @@ except Exception:
 _HF_PIPELINE = None
 
 
+def _is_hub_model_id(path: str) -> bool:
+    """Returns True if path looks like a HuggingFace Hub model ID (e.g. 'org/model-name')."""
+    return bool(path) and "/" in path and not os.sep in path
+
+
 def is_ner_model_available() -> bool:
-    """Checks whether a fine-tuned Transformer model checkpoint is locally available."""
+    """Checks whether a Transformer model is available — either as a local checkpoint or a Hub ID."""
+    if _is_hub_model_id(NER_MODEL_PATH):
+        return True  # Hub ID: assume available (network check happens at load time)
     return os.path.exists(NER_MODEL_PATH) and os.path.isdir(NER_MODEL_PATH)
 
 
@@ -105,6 +115,51 @@ def extract_entities_rule_based(text: str) -> Dict[str, List[str]]:
     return entities
 
 
+def _clean_hf_word(word: str) -> str:
+    """
+    Cleans a HuggingFace aggregated word:
+    - Removes subword prefix '##' artifacts
+    - Strips leading/trailing punctuation and whitespace
+    - Collapses internal spaces
+    """
+    word = word.replace("##", "").strip(" .,;:!?-")
+    word = " ".join(word.split())
+    return word
+
+
+def _resolve_to_canonical(word: str, group: str) -> Optional[str]:
+    """
+    Tries to resolve a (possibly lowercased/fragmented) word back to its
+    canonical taxonomy form.
+
+    For SKILL/TECH: returns None if the word is NOT found in the taxonomy
+    (prevents false positives like 'Vehicles', 'Dish', 'Fleet').
+    For ORG/ROLE/DEGREE: returns the word as-is (not taxonomy-bounded).
+    """
+    if not word:
+        return None
+    lower = word.lower()
+
+    # Direct lookup in the prebuilt lower→canonical map
+    canonical = _LOWER_TO_CANONICAL.get(lower)
+    if canonical:
+        return canonical
+
+    # Partial prefix match — only for known subword fragments (min 4 chars)
+    # e.g. 'dock' → 'Docker', 'kube' → 'Kubernetes'
+    if len(lower) >= 4:
+        for key, val in _LOWER_TO_CANONICAL.items():
+            if key.startswith(lower):
+                return val
+
+    # For SKILL/TECH: reject words not in taxonomy to avoid false positives
+    if group in ("SKILL", "TECH"):
+        return None
+
+    # For ORG, ROLE, DEGREE: accept and title-case
+    return word.title() if word.islower() else word
+
+
 def extract_entities(text: str) -> Dict[str, List[str]]:
     """
     Unified extraction interface:
@@ -118,9 +173,21 @@ def extract_entities(text: str) -> Dict[str, List[str]]:
             entities: Dict[str, List[str]] = {etype: [] for etype in ENTITY_TYPES}
             for res in results:
                 group = res.get("entity_group", "")
-                word = res.get("word", "").strip()
-                if group in entities and word and word not in entities[group]:
+                raw_word = res.get("word", "")
+                if group not in entities:
+                    continue
+                word = _clean_hf_word(raw_word)
+                if not word or len(word) < 2:
+                    continue
+                word = _resolve_to_canonical(word, group)
+                if word and word not in entities[group]:
                     entities[group].append(word)
+            # Merge DistilBERT results with rule-based for higher recall
+            rule_entities = extract_entities_rule_based(text)
+            for etype in ENTITY_TYPES:
+                for item in rule_entities.get(etype, []):
+                    if item not in entities[etype]:
+                        entities[etype].append(item)
             return entities
         except Exception:
             pass  # Fallback to rule-based

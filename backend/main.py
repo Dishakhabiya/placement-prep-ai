@@ -10,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_db
 from routers.profile import router as profile_router
 from routers.questions import router as questions_router
+from routers.answers import router as answers_router
+from routers.chat import router as chat_router
+
 
 
 @asynccontextmanager
@@ -30,7 +33,17 @@ app = FastAPI(
 # CORS Configuration for local development (React Native Expo, iOS Simulator, Android Emulator, Web)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8081",
+        "http://localhost:8082",
+        "http://localhost:8083",
+        "http://localhost:8084",
+        "http://127.0.0.1:8081",
+        "http://127.0.0.1:8082",
+        "http://127.0.0.1:8083",
+        "http://127.0.0.1:8084",
+        "*",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +52,9 @@ app.add_middleware(
 # Register endpoints
 app.include_router(profile_router)
 app.include_router(questions_router)
+app.include_router(answers_router)
+app.include_router(chat_router)
+
 
 
 @app.get("/")

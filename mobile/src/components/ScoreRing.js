@@ -38,7 +38,7 @@ export default function ScoreRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#1E293B"
+          stroke="#E5E7EB"
           strokeWidth={strokeWidth}
           fill="transparent"
         />
@@ -85,8 +85,8 @@ const styles = StyleSheet.create({
   },
   scoreLabel: {
     fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '600',
+    color: '#6B7280',
+    fontWeight: '700',
     marginTop: 2,
     textTransform: 'uppercase',
   },

@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "PrepAI UI",
+    "slug": "prepai-ui",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF3E4"
+      }
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}

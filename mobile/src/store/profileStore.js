@@ -37,14 +37,14 @@ export const useProfileStore = create((set, get) => ({
     }
   },
 
-  async submitResumeAndJD({ file, jdText, mode }) {
-    set({ isLoading: true, error: null, loadingStage: 'Uploading resume & parsing content...' });
+  async submitResumeAndJD({ file, jdText, jdFile, mode }) {
+    set({ isLoading: true, error: null, loadingStage: 'Uploading documents & parsing content...' });
     try {
       setTimeout(() => set({ loadingStage: 'Analyzing NLP entities & technical skills...' }), 1200);
       setTimeout(() => set({ loadingStage: 'Parsing Job Description requirements...' }), 2400);
       setTimeout(() => set({ loadingStage: 'Evaluating match gap & building interview topics...' }), 3600);
 
-      const profile = await apiClient.createProfile({ file, jdText, mode });
+      const profile = await apiClient.createProfile({ file, jdText, jdFile, mode });
       
       set({ currentProfile: profile, isLoading: false, loadingStage: '', lastProfileId: profile.profile_id });
       await AsyncStorage.setItem(LAST_PROFILE_KEY, profile.profile_id);

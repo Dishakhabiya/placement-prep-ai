@@ -1,5 +1,6 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 
@@ -12,71 +13,160 @@ import MatchSummaryScreen from './src/screens/MatchSummaryScreen';
 import TopicsScreen from './src/screens/TopicsScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import MockInterviewScreen from './src/screens/MockInterviewScreen';
+import PerformanceReportScreen from './src/screens/PerformanceReportScreen';
+import ChatbotScreen from './src/screens/ChatbotScreen';
+import PrepHomeScreen from './src/screens/PrepHomeScreen';
+import PrepPinkHomeScreen from './src/screens/PrepPinkHomeScreen';
+import PrepPracticeScreen from './src/screens/PrepPracticeScreen';
+import PrepAIApp from './src/prepai/PrepAIApp';
+
+// Persistent Global Floating Chatbot
+import FloatingChatbot from './src/components/FloatingChatbot';
+
+export const navigationRef = createNavigationContainerRef();
 
 const Stack = createNativeStackNavigator();
 
+const getInitialRoute = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.port === '8084' || window.location.hash.includes('preppractice')) {
+      return 'PrepPractice';
+    }
+    if (window.location.port === '8083' || window.location.hash.includes('preppink')) {
+      return 'PrepPinkHome';
+    }
+    if (window.location.port === '8082' || window.location.hash.includes('prephome')) {
+      return 'PrepHome';
+    }
+  }
+  return 'Home';
+};
+
 export default function App() {
+  if (
+    process.env.EXPO_PUBLIC_APP_VARIANT === 'prepai' ||
+    (typeof window !== 'undefined' &&
+      window.location &&
+      (window.location.port === '8082' || window.location.hash.includes('prepaidsk')))
+  ) {
+    return <PrepAIApp />;
+  }
+
+  const initialRoute = getInitialRoute();
+  const [currentRoute, setCurrentRoute] = useState(initialRoute);
+
   return (
-    <NavigationContainer>
-      <StatusBar style="light" backgroundColor="#0F172A" />
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: '#0F172A',
-          },
-          headerTintColor: '#F8FAFC',
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 16,
-          },
-          contentStyle: {
-            backgroundColor: '#0F172A',
-          },
-          headerShadowVisible: false,
+    <View style={styles.appRoot}>
+      <NavigationContainer
+        ref={navigationRef}
+        onStateChange={() => {
+          if (navigationRef.isReady()) {
+            const route = navigationRef.getCurrentRoute();
+            if (route) setCurrentRoute(route.name);
+          }
         }}
       >
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Upload"
-          component={UploadScreen}
-          options={{ title: 'Resume & JD Upload' }}
-        />
-        <Stack.Screen
-          name="Processing"
-          component={ProcessingScreen}
-          options={{ title: 'NLP Pipeline', headerBackVisible: false }}
-        />
-        <Stack.Screen
-          name="ReviewProfile"
-          component={ReviewProfileScreen}
-          options={{ title: 'Candidate Profile Review' }}
-        />
-        <Stack.Screen
-          name="MatchSummary"
-          component={MatchSummaryScreen}
-          options={{ title: 'Resume–JD Match Analysis' }}
-        />
-        <Stack.Screen
-          name="Topics"
-          component={TopicsScreen}
-          options={{ title: 'Ranked Interview Topics' }}
-        />
-        <Stack.Screen
-          name="MockInterview"
-          component={MockInterviewScreen}
-          options={{ title: 'Module 2: Mock Interview Session' }}
-        />
-        <Stack.Screen
-          name="History"
-          component={HistoryScreen}
-          options={{ title: 'Saved Profiles' }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+        <StatusBar style="dark" backgroundColor="#FFFFFF" />
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#FFFFFF',
+            },
+            headerTintColor: '#111827',
+            headerTitleStyle: {
+              fontWeight: '700',
+              fontSize: 16,
+              color: '#111827',
+            },
+            contentStyle: {
+              backgroundColor: '#F8F9FA',
+            },
+            headerShadowVisible: false,
+          }}
+        >
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepHome"
+            component={PrepHomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepPinkHome"
+            component={PrepPinkHomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PrepPractice"
+            component={PrepPracticeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Upload"
+            component={UploadScreen}
+            options={{ title: 'Resume & JD Upload' }}
+          />
+          <Stack.Screen
+            name="Processing"
+            component={ProcessingScreen}
+            options={{ title: 'NLP Pipeline', headerBackVisible: false }}
+          />
+          <Stack.Screen
+            name="ReviewProfile"
+            component={ReviewProfileScreen}
+            options={{ title: 'Candidate Profile Review' }}
+          />
+          <Stack.Screen
+            name="MatchSummary"
+            component={MatchSummaryScreen}
+            options={{ title: 'Resume–JD Match Analysis' }}
+          />
+          <Stack.Screen
+            name="Topics"
+            component={TopicsScreen}
+            options={{ title: 'Ranked Interview Topics' }}
+          />
+          <Stack.Screen
+            name="MockInterview"
+            component={MockInterviewScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PerformanceReport"
+            component={PerformanceReportScreen}
+            options={{ title: 'Session Performance Report', headerBackVisible: false }}
+          />
+          <Stack.Screen
+            name="Chatbot"
+            component={ChatbotScreen}
+            options={{ title: 'AI Placement Coach' }}
+          />
+          <Stack.Screen
+            name="History"
+            component={HistoryScreen}
+            options={{ title: 'Saved Profiles' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+
+      {/* Global persistent chatbot docked in the bottom-left corner across every screen */}
+      {currentRoute !== 'PrepHome' && currentRoute !== 'PrepPinkHome' && currentRoute !== 'PrepPractice' && (
+        <FloatingChatbot navigationRef={navigationRef} currentRoute={currentRoute} />
+      )}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+    position: 'relative',
+    height: '100%',
+    width: '100%',
+  },
+});
+
